@@ -95,9 +95,9 @@ with open(dataset_file, "rb") as f:
 	dataset = pickle.load(f)
 
 checkpoint_dir = 'checkpoints/'
-states = dataset['observations'][:10000]
+states = dataset['observations']
 #next_states = dataset['next_observations']
-actions = dataset['actions'][:10000]
+actions = dataset['actions']
 
 N = states.shape[0]
 
