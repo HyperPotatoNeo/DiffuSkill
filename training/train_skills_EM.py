@@ -7,11 +7,6 @@ from torch.utils.data import TensorDataset
 from torch.utils.data.dataloader import DataLoader
 import torch.distributions.normal as Normal
 from models.skill_model import SkillModel
-import gym
-from mujoco_py import GlfwContext
-GlfwContext(offscreen=True)
-import d4rl
-import ipdb
 import h5py
 from utils.utils import chunks
 import os
@@ -157,7 +152,6 @@ experiment.log_parameters({'lr':lr,
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
 inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
 
-
 train_data = TensorDataset(inputs_train)
 test_data  = TensorDataset(inputs_test)
 
@@ -232,5 +226,3 @@ for i in range(n_epochs):
 							'E_optimizer_state_dict': E_optimizer.state_dict(),
 							'M_optimizer_state_dict': M_optimizer.state_dict()
 							}, checkpoint_path)
-
-	
