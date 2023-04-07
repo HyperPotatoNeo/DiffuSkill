@@ -62,7 +62,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2):
     env = gym.make(env_name)
     dataset = env.get_dataset()
 
-    if env_name == 'antmaze-large-diverse-v1':
+    if env_name == 'antmaze-large-diverse-v2':
         observations = []
         actions = []
         rewards = []
