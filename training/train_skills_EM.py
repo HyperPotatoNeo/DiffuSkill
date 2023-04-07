@@ -12,7 +12,7 @@ from utils.utils import get_dataset
 import os
 import pickle
 
-def train(model,E_optimizer,M_optimizer):
+def train(model, E_optimizer, M_optimizer, train_state_decoder):
 	
 	E_losses = []
 	M_losses = []
@@ -29,7 +29,7 @@ def train(model,E_optimizer,M_optimizer):
 		E_optimizer.step()
 
 		########### M STEP ###########
-		M_loss = model.get_M_loss(states,actions)
+		M_loss = model.get_M_loss(states, actions, train_state_decoder)
 		model.zero_grad()
 		M_loss.backward()
 		M_optimizer.step()
@@ -40,7 +40,7 @@ def train(model,E_optimizer,M_optimizer):
 		
 	return np.mean(E_losses),np.mean(M_losses)
 
-def test(model):
+def test(model, test_state_decoder):
 	
 	losses = []
 	s_T_losses = []
@@ -54,11 +54,14 @@ def test(model):
 			states = data[:,:,:model.state_dim]  # first state_dim elements are the state
 			actions = data[:,:,model.state_dim:]	 # rest are actions
 
-			loss_tot, s_T_loss, a_loss, kl_loss  = model.get_losses(states, actions)
+			if test_state_decoder:
+				loss_tot, s_T_loss, a_loss, kl_loss  = model.get_losses(states, actions, test_state_decoder)
+				s_T_losses.append(s_T_loss.item())
+			else:
+				loss_tot, a_loss, kl_loss  = model.get_losses(states, actions, test_state_decoder)
 
 			# log losses
 			losses.append(loss_tot.item())
-			s_T_losses.append(s_T_loss.item())
 			a_losses.append(a_loss.item())
 			kl_losses.append(kl_loss.item())
 
@@ -81,6 +84,7 @@ state_decoder_type = 'mlp' #'autoregressive'
 policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = False
+start_training_state_decoder_after = 0
 
 env_name = 'antmaze-large-diverse-v1'
 #env_name = 'kitchen-partial-v0'
@@ -160,9 +164,10 @@ test_loader = DataLoader(
 min_test_loss = 10**10
 min_test_s_T_loss = 10**10
 min_test_a_loss = 10**10
+
 for i in range(n_epochs):
 
-	test_loss, test_s_T_loss, test_a_loss, test_kl_loss = test(model)
+	test_loss, test_s_T_loss, test_a_loss, test_kl_loss = test(model, i > start_training_state_decoder_after)
 	
 	print("--------TEST---------")
 	
@@ -200,7 +205,7 @@ for i in range(n_epochs):
 				'E_optimizer_state_dict': E_optimizer.state_dict(),
 							'M_optimizer_state_dict': M_optimizer.state_dict()}, checkpoint_path)
 
-	E_loss,M_loss = train(model,E_optimizer,M_optimizer)
+	E_loss, M_loss = train(model, E_optimizer, M_optimizer, train_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TRAIN---------")
 	

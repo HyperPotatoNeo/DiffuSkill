@@ -332,7 +332,7 @@ class Decoder(nn.Module):
 		self.a_dist = a_dist
 
 		
-	def forward(self,states,actions,z):
+	def forward(self, states, actions, z, state_decoder):
 
 		'''
 		INPUTS: 
@@ -352,14 +352,16 @@ class Decoder(nn.Module):
 			a_mean,a_sig = self.ll_policy(states,z)
 		elif self.policy_decoder_type == 'autoregressive':
 			a_mean,a_sig = self.ll_policy(states,actions,z)
-		
-		if self.state_decoder_type == 'autoregressive':
-			sT_mean,sT_sig = self.abstract_dynamics(s_0,s_T,z.detach())
-		elif self.state_decoder_type == 'mlp':
-			sT_mean,sT_sig = self.abstract_dynamics(s_0,z.detach())
 
-		return sT_mean,sT_sig,a_mean,a_sig
-		
+		if state_decoder:
+			if self.state_decoder_type == 'autoregressive':
+				sT_mean, sT_sig = self.abstract_dynamics(s_0, s_T, z.detach())
+			elif self.state_decoder_type == 'mlp':
+				sT_mean, sT_sig = self.abstract_dynamics(s_0, z.detach())
+			return sT_mean, sT_sig, a_mean, a_sig
+
+		else:
+			return a_mean, a_sig
 
 
 class Prior(nn.Module):
@@ -449,7 +451,7 @@ class SkillModel(nn.Module):
 
 		self.gen_model = GenerativeModel(self.decoder,self.prior)
 
-	def forward(self,states,actions):
+	def forward(self, states, actions, state_decoder):
 		
 		'''
 		Takes states and actions, returns the distributions necessary for computing the objective function
@@ -471,9 +473,12 @@ class SkillModel(nn.Module):
 		z_sampled = self.reparameterize(z_post_means,z_post_sigs)
 
 		# STEP 3. Pass z_sampled and states through decoder 
-		s_T_mean, s_T_sig, a_means, a_sigs = self.decoder(states,actions,z_sampled)
-
-		return s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs
+		if state_decoder:
+			s_T_mean, s_T_sig, a_means, a_sigs = self.decoder(states, actions, z_sampled, state_decoder)
+			return s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs
+		else:
+			a_means, a_sigs = self.decoder(states, actions, z_sampled, state_decoder)
+			return a_means, a_sigs, z_post_means, z_post_sigs
 
 	def get_E_loss(self,states,actions):
 
@@ -500,7 +505,7 @@ class SkillModel(nn.Module):
 
 		return -log_pi + -self.beta*log_prior + self.beta*log_post
 
-	def get_M_loss(self,states,actions):
+	def get_M_loss(self, states, actions, train_state_decoder):
 
 		batch_size,T,_ = states.shape
 		denom = T*batch_size
@@ -509,23 +514,30 @@ class SkillModel(nn.Module):
 
 		z_sampled = self.reparameterize(z_post_means,z_post_sigs)
 
-		z_prior_means,z_prior_sigs = self.prior(states[:,0:1,:]) 
-		sT_mean, sT_sig, a_means, a_sigs = self.decoder(states,actions,z_sampled)
+		z_prior_means, z_prior_sigs = self.prior(states[:, 0:1, :])
 
-		sT_dist  = Normal.Normal(sT_mean,sT_sig)
+		loss = 0
+		if train_state_decoder:
+			sT_mean, sT_sig, a_means, a_sigs = self.decoder(states, actions, z_sampled, train_state_decoder)
+			sT_dist = Normal.Normal(sT_mean, sT_sig)
+			sT = states[:,-1:,:]
+			sT_loss = -torch.sum(sT_dist.log_prob(sT)) / denom
+			loss += sT_loss
+		else:
+			a_means, a_sigs = self.decoder(states, actions, z_sampled, train_state_decoder)
+
 		a_dist    = Normal.Normal(a_means,a_sigs)
 		prior_dist = Normal.Normal(z_prior_means,z_prior_sigs)
 
-		sT = states[:,-1:,:]
-		sT_loss = -torch.sum(sT_dist.log_prob(sT)) / denom
 		a_loss =  -torch.sum(a_dist.log_prob(actions)) / denom
+		loss += a_loss
 		prior_loss = -torch.sum(prior_dist.log_prob(z_sampled)) / denom
+		loss += self.beta * prior_loss
 
-		return sT_loss + a_loss + self.beta*prior_loss
-
+		return loss
 
 	
-	def get_losses(self,states,actions):
+	def get_losses(self, states, actions, state_decoder):
 		'''
 		Computes various components of the loss:
 		L = E_q [log P(s_T|s_0,z)] 
@@ -533,10 +545,17 @@ class SkillModel(nn.Module):
 		  - D_kl(q(z|s_0,...,s_T,a_0,...,a_T)||P(z_0|s_0))
 		Distributions we need:
 		'''
+		T = states.shape[1]
+		# loss terms corresponding to -logP(s_T|s_0,z) and -logP(a_t|s_t,z)
+		s_T = states[:,-1:,:]
 
-		s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs  = self.forward(states,actions)
+		if state_decoder:
+			s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs = self.forward(states, actions, state_decoder)
+			s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
+			s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
+		else:
+			a_means, a_sigs, z_post_means, z_post_sigs = self.forward(states, actions, state_decoder)
 
-		s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
 		if self.decoder.ll_policy.a_dist == 'normal':
 			a_dist = Normal.Normal(a_means, a_sigs)
 		elif self.decoder.ll_policy.a_dist == 'tanh_normal':
@@ -549,19 +568,19 @@ class SkillModel(nn.Module):
 		z_prior_means,z_prior_sigs = self.prior(states[:,0:1,:]) 
 		z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs) 
 
-		# loss terms corresponding to -logP(s_T|s_0,z) and -logP(a_t|s_t,z)
-		T = states.shape[1]
-		s_T = states[:,-1:,:]  
-		s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T),   dim=-1))/T 
 		a_loss   = -torch.mean(torch.sum(a_dist.log_prob(actions), dim=-1))
 	
 		kl_loss = torch.mean(torch.sum(KL.kl_divergence(z_post_dist, z_prior_dist), dim=-1))/T 
 
-		loss_tot = s_T_loss + a_loss + self.beta*kl_loss
+		loss_tot = a_loss + self.beta * kl_loss
 
-		return  loss_tot, s_T_loss, a_loss, kl_loss
+		if state_decoder:
+			loss_tot += s_T_loss
+			return  loss_tot, s_T_loss, a_loss, kl_loss
+		else:
+			return  loss_tot, a_loss, kl_loss
 
-	
+
 	def get_expected_cost(self, s0, skill_seq, goal_states):
 		'''
 		s0 is initial state  # batch_size x 1 x s_dim

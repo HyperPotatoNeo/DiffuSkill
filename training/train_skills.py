@@ -8,27 +8,30 @@ from torch.utils.data.dataloader import DataLoader
 import torch.distributions.normal as Normal
 from models.skill_model import SkillModel
 import h5py
-from utils.utils import chunks
+from utils.utils import get_dataset
 import os
 import pickle
 
-def train(model, optimizer):
+def train(model, optimizer, train_state_decoder):
 	losses = []
 	
 	for batch_id, data in enumerate(train_loader):
 		data = data.cuda()
 		states = data[:,:,:model.state_dim]
 		actions = data[:,:,model.state_dim:]
-		loss_tot, s_T_loss, a_loss, kl_loss = model.get_losses(states, actions)
+		if train_state_decoder:
+			loss_tot, s_T_loss, a_loss, kl_loss = model.get_losses(states, actions, train_state_decoder)
+		else:
+			loss_tot, a_loss, kl_loss = model.get_losses(states, actions, train_state_decoder)
 		model.zero_grad()
-		loss.backward()
+		loss_tot.backward()
 		optimizer.step()
 		# log losses
-		losses.append(loss.item())
+		losses.append(loss_tot.item())
 		
-	return np.mean(E_losses),np.mean(M_losses)
+	return np.mean(losses)
 
-def test(model):	
+def test(model, test_state_decoder):
 	losses = []
 	s_T_losses = []
 	a_losses = []
@@ -40,10 +43,13 @@ def test(model):
 			data = data.cuda()
 			states = data[:,:,:model.state_dim]
 			actions = data[:,:,model.state_dim:]
-			loss_tot, s_T_loss, a_loss, kl_loss  = model.get_losses(states, actions)
+			if test_state_decoder:
+				loss_tot, s_T_loss, a_loss, kl_loss  = model.get_losses(states, actions, test_state_decoder)
+				s_T_losses.append(s_T_loss.item())
+			else:
+				loss_tot, a_loss, kl_loss  = model.get_losses(states, actions, test_state_decoder)
 			# log losses
 			losses.append(loss_tot.item())
-			s_T_losses.append(s_T_loss.item())
 			a_losses.append(a_loss.item())
 			kl_losses.append(kl_loss.item())
 
@@ -66,8 +72,9 @@ state_decoder_type = 'mlp' #'autoregressive'
 policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = False
+start_training_state_decoder_after = 0
 
-env_name = 'antmaze-large-diverse-v0'
+env_name = 'antmaze-large-diverse-v1'
 #env_name = 'kitchen-partial-v0'
 
 dataset_file = 'data/'+env_name+'.pkl'
@@ -87,15 +94,12 @@ a_dim = actions.shape[1]
 N_train = int((1-test_split)*N)
 N_test = N - N_train
 
-states_train  = states[:N_train,:]
-#next_states_train = next_states[:N_train,:]
-actions_train = actions[:N_train,:]
-states_test  = states[N_train:,:]
-#next_states_test = next_states[N_train:,:]
-actions_test = actions[N_train:,:]
+dataset = get_dataset(env_name, H, stride, test_split)
 
-obs_chunks_train, action_chunks_train = chunks(states_train, actions_train, H, stride)
-obs_chunks_test,  action_chunks_test  = chunks(states_test, actions_test, H, stride)
+obs_chunks_train = dataset['observations_train']
+action_chunks_train = dataset['actions_train']
+obs_chunks_test = dataset['observations_test']
+action_chunks_test = dataset['actions_test']
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
@@ -148,7 +152,7 @@ min_test_s_T_loss = 10**10
 min_test_a_loss = 10**10
 for i in range(n_epochs):
 
-	test_loss, test_s_T_loss, test_a_loss, test_kl_loss = test(model)
+	test_loss, test_s_T_loss, test_a_loss, test_kl_loss = test(model, test_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TEST---------")
 	
@@ -180,7 +184,7 @@ for i in range(n_epochs):
 		torch.save({'model_state_dict': model.state_dict(),
 				'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
 
-	loss = train(model,optimizer)
+	loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TRAIN---------")
 	
