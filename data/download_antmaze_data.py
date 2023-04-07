@@ -11,7 +11,7 @@ datasets = []
 env_name = 'antmaze'
 
 for dataset_type in ['medium-diverse', 'large-diverse']:
-	name = f'{env_name}-{dataset_type}-v0'
+	name = f'{env_name}-{dataset_type}-v1'
 	env = gym.make(name)
 	dataset = env.get_dataset()
 	with open(name+".pkl","wb") as f:

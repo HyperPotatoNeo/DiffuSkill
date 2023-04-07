@@ -8,7 +8,7 @@ from torch.utils.data.dataloader import DataLoader
 import torch.distributions.normal as Normal
 from models.skill_model import SkillModel
 import h5py
-from utils.utils import chunks
+from utils.utils import get_dataset
 import os
 import pickle
 
@@ -82,7 +82,7 @@ policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = False
 
-env_name = 'antmaze-large-diverse-v0'
+env_name = 'antmaze-large-diverse-v1'
 #env_name = 'kitchen-partial-v0'
 
 dataset_file = 'data/'+env_name+'.pkl'
@@ -102,20 +102,12 @@ a_dim = actions.shape[1]
 N_train = int((1-test_split)*N)
 N_test = N - N_train
 
-states_train  = states[:N_train,:]
-#next_states_train = next_states[:N_train,:]
-actions_train = actions[:N_train,:]
+dataset = get_dataset(env_name, H, stride, test_split)
 
-states_test  = states[N_train:,:]
-#next_states_test = next_states[N_train:,:]
-actions_test = actions[N_train:,:]
-
-obs_chunks_train, action_chunks_train = chunks(states_train, actions_train, H, stride)
-
-print('states_test.shape: ',states_test.shape)
-print('MAKIN TEST SET!!!')
-
-obs_chunks_test,  action_chunks_test  = chunks(states_test, actions_test, H, stride)
+obs_chunks_train = dataset['observations_train']
+action_chunks_train = dataset['actions_train']
+obs_chunks_test = dataset['observations_test']
+action_chunks_test = dataset['actions_test']
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 # experiment.add_tag('noisy2')
