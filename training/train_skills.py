@@ -74,7 +74,7 @@ load_from_checkpoint = False
 per_element_sigma = False
 start_training_state_decoder_after = 0
 
-env_name = 'antmaze-large-diverse-v1'
+env_name = 'antmaze-large-diverse-v2'
 #env_name = 'kitchen-partial-v0'
 
 dataset_file = 'data/'+env_name+'.pkl'
