@@ -433,7 +433,7 @@ class GenerativeModel(nn.Module):
 
 
 class SkillModel(nn.Module):
-	def __init__(self,state_dim,a_dim,z_dim,h_dim,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True):
+	def __init__(self,state_dim,a_dim,z_dim,h_dim,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True):
 		super(SkillModel, self).__init__()
 
 		self.state_dim = state_dim # state dimension
@@ -441,15 +441,18 @@ class SkillModel(nn.Module):
 		self.encoder_type = encoder_type
 		self.state_decoder_type = state_decoder_type
 		self.policy_decoder_type = policy_decoder_type
+		self.conditional_prior = conditional_prior
 		
 		if encoder_type == 'gru':
 			self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim)
 
 		self.decoder = Decoder(state_dim,a_dim,z_dim,h_dim, a_dist, fixed_sig=fixed_sig,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma)
-		self.prior   = Prior(state_dim,z_dim,h_dim)
+		if conditional_prior:
+			self.prior   = Prior(state_dim,z_dim,h_dim)
+			self.gen_model = GenerativeModel(self.decoder,self.prior)
+
 		self.beta    = beta
 
-		self.gen_model = GenerativeModel(self.decoder,self.prior)
 
 	def forward(self, states, actions, state_decoder):
 		
@@ -565,8 +568,13 @@ class SkillModel(nn.Module):
 
 		z_post_dist = Normal.Normal(z_post_means, z_post_sigs)
 
-		z_prior_means,z_prior_sigs = self.prior(states[:,0:1,:]) 
-		z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs) 
+		if self.conditional_prior:
+			z_prior_means,z_prior_sigs = self.prior(states[:,0:1,:]) 
+			z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs) 
+		else:
+			z_prior_means = torch.zeros_like(z_post_means)
+			z_prior_sigs = torch.ones_like(z_post_sigs)
+			z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs)
 
 		a_loss   = -torch.mean(torch.sum(a_dist.log_prob(actions), dim=-1))
 	

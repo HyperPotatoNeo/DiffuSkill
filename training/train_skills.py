@@ -73,6 +73,7 @@ policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = False
 start_training_state_decoder_after = 0
+conditional_prior = True
 
 env_name = 'antmaze-large-diverse-v2'
 #env_name = 'kitchen-partial-v0'
@@ -104,10 +105,10 @@ action_chunks_test = dataset['actions_test']
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
 
-model = SkillModel(state_dim,a_dim,z_dim,h_dim,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma).cuda()
+model = SkillModel(state_dim,a_dim,z_dim,h_dim,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
-filename = 'skill_model_'+env_name+'_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)
+filename = 'skill_model_'+env_name+'_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)
 
 if load_from_checkpoint:
 	PATH = os.path.join(checkpoint_dir,filename+'_best_sT.pth')
