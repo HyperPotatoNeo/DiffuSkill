@@ -135,9 +135,6 @@ experiment.log_parameters({'lr':lr,
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
 inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
 
-train_data = TensorDataset(inputs_train)
-test_data  = TensorDataset(inputs_test)
-
 train_loader = DataLoader(
 	inputs_train,
 	batch_size=batch_size,
