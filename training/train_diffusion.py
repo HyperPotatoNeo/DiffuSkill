@@ -113,7 +113,7 @@ def train(args):
             pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
             optim.step()
 
-            torch.save(model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
+        torch.save(model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
 
         results_ep.append(loss_ep / n_batch)
 
