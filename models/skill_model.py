@@ -442,7 +442,7 @@ class SkillModel(nn.Module):
 		self.state_decoder_type = state_decoder_type
 		self.policy_decoder_type = policy_decoder_type
 		self.conditional_prior = conditional_prior
-		self.prior = None
+		self.diffusion_prior = None
 		
 		if encoder_type == 'gru':
 			self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim)

@@ -554,8 +554,7 @@ class Model_cnn_mlp(nn.Module):
 
 class Model_mlp(nn.Module):
     def __init__(self, x_shape, n_hidden, y_dim, embed_dim, net_type, output_dim=None):
-        super(Model_cnn_mlp, self).__init__()
-
+        super(Model_mlp, self).__init__()
         self.x_shape = x_shape
         self.n_hidden = n_hidden
         self.y_dim = y_dim
@@ -581,4 +580,4 @@ class Model_mlp(nn.Module):
         )
 
     def forward(self, y, x, t, context_mask, x_embed=None):
-        return self.nn(y, x_embed, t, context_mask)
+        return self.nn(y, x, t, context_mask)
