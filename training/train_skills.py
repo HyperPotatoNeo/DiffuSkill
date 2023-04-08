@@ -58,21 +58,22 @@ def test(model, test_state_decoder):
 batch_size = 100
 
 h_dim = 256
-z_dim = 256
+z_dim = 64
 lr = 5e-5
 wd = 0.0
-beta = 1.0
-H = 40
+H = 30
 stride = 1
 n_epochs = 50000
 test_split = .2
 a_dist = 'normal' # 'tanh_normal' or 'normal'
 encoder_type = 'gru' #'state_sequence'
-state_decoder_type = 'mlp' #'autoregressive'
+state_decoder_type = 'autoregressive'
 policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
-per_element_sigma = False
-start_training_state_decoder_after = 0
+per_element_sigma = True
+start_training_state_decoder_after = 20
+
+beta = 1.0 # 0.1, 0.01, 0.001
 conditional_prior = True
 
 env_name = 'antmaze-large-diverse-v2'
@@ -130,7 +131,8 @@ experiment.log_parameters({'lr':lr,
 							'encoder_type':encoder_type,
 							'state_decoder_type':state_decoder_type,
 							'policy_decoder_type':policy_decoder_type,
-							'per_element_sigma':per_element_sigma})
+							'per_element_sigma':per_element_sigma,
+       						'conditional_prior': conditional_prior})
 
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
 inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
