@@ -21,6 +21,8 @@ def eval_func(diffusion_model,
               skill_model,
               envs,
               state_dim,
+              state_mean,
+              state_std,
               num_evals,
               num_parallel_envs,
               num_diffusion_samples,
@@ -43,11 +45,11 @@ def eval_func(diffusion_model,
         for env_step in range(1001):
             state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
-            latent_0 = diffusion_model.sample_extra(state, extra_steps=extra_steps)
+            latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, extra_steps=extra_steps)
             state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
 
             for depth in range(1, planning_depth):
-                latent = diffusion_model.sample_extra(state, extra_steps=extra_steps)
+                latent = diffusion_model.sample_extra((state - state_mean) / state_std, extra_steps=extra_steps)
                 state, _ = skill_model.decoder.abstract_dynamics(state, latent)
 
             best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
@@ -109,10 +111,16 @@ def evaluate(args):
 
     envs = [gym.make(args.env) for _ in range(args.num_parallel_envs)]
 
+    state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
+    state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
+    state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
+
     eval_func(diffusion_model,
               skill_model,
               envs,
               state_dim,
+              state_mean,
+              state_std,
               args.num_evals,
               args.num_parallel_envs,
               args.num_diffusion_samples,
@@ -130,8 +138,8 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--num_evals', type=int, default=1)
     parser.add_argument('--num_parallel_envs', type=int, default=1)
-    parser.add_argument('--skill_seq_len', type=int, default=1)
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
+    parser.add_argument('--dataset_dir', type=str, default='data')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--diffusion_model_filename', type=str)
 
