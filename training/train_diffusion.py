@@ -14,8 +14,7 @@ from models.diffusion_models import (
     Model_Cond_Diffusion,
 )
 
-DATASET_PATH = "dataset"
-SAVE_DATA_DIR = "output"  # for models/data
+DATASET_PATH = "data/"
 
 n_epoch = 100
 lrate = 1e-4
@@ -31,8 +30,8 @@ class PriorDataset(Dataset):
         self, DATASET_PATH, train_or_test="train", train_prop=0.90
     ):
         # just load it all into RAM
-        self.state_all = np.load(os.path.join(DATASET_PATH, "states.npy"), allow_pickle=True)
-        self.latent_all = np.load(os.path.join(DATASET_PATH, "latents.npy"), allow_pickle=True)
+        self.state_all = np.load(os.path.join(DATASET_PATH, "_states.npy"), allow_pickle=True)
+        self.latent_all = np.load(os.path.join(DATASET_PATH, "_latents.npy"), allow_pickle=True)
         n_train = int(self.state_all.shape[0] * train_prop)
         if train_or_test == "train":
             self.state_all = self.state_all[:n_train]
@@ -86,6 +85,7 @@ def train(n_epoch, lrate, device, n_hidden, batch_size, n_T, net_type):
     exp_name = 'diffusion'
     drop_prob = 0.0
 
+    DATASET_PATH = DATASET_PATH + args.skill_model_path
     # get datasets set up
     torch_data_train = PriorDataset(
         DATASET_PATH, train_or_test="train", train_prop=0.90
@@ -201,5 +201,4 @@ if __name__ == "__main__":
     parser.add_argument('--h_dim', type=int, default=256)
     parser.add_argument('--z_dim', type=int, default=256)
 
-    os.makedirs(SAVE_DATA_DIR, exist_ok=True)
     train(args.n_epoch, args.lrate, device, args.n_hidden, args.batch_size, args.n_T, args.net_type, args)
