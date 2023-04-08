@@ -51,31 +51,30 @@ def test():
         .to(device)
     )
 
-    for j in range(6 if not use_kde else 300):
-        x_eval_ = x_eval.repeat(50, 1, 1, 1)
-        if exp_name == "cfg":
-            model.guide_w = guide_weight
+    x_eval_ = x_eval.repeat(50, 1, 1, 1)
+    if exp_name == "cfg":
+        model.guide_w = guide_weight
 
-        if extra_diffusion_step == 0:
-            y_pred_ = (
-                model.sample(x_eval_, extract_embedding=True)
-                .detach()
-                .cpu()
-                .numpy()
-            )
+    if extra_diffusion_step == 0:
+        y_pred_ = (
+            model.sample(x_eval_, extract_embedding=True)
+            .detach()
+            .cpu()
+            .numpy()
+        )
 
-            if use_kde:
-                # kde
-                torch_obs_many = x_eval_
-                action_pred_many = model.sample(torch_obs_many).cpu().numpy()
-                # fit kde to the sampled actions
-                kde = KernelDensity(kernel='gaussian', bandwidth=0.1).fit(action_pred_many)
-                # choose the max likelihood one
-                log_density = kde.score_samples(action_pred_many)
-                idx = np.argmax(log_density)
-                y_pred_ = action_pred_many[idx][None, :]
-        else:
-            y_pred_ = model.sample_extra(x_eval_, extra_steps=extra_diffusion_step).detach().cpu().numpy()
+        if use_kde:
+            # kde
+            torch_obs_many = x_eval_
+            action_pred_many = model.sample(torch_obs_many).cpu().numpy()
+            # fit kde to the sampled actions
+            kde = KernelDensity(kernel='gaussian', bandwidth=0.1).fit(action_pred_many)
+            # choose the max likelihood one
+            log_density = kde.score_samples(action_pred_many)
+            idx = np.argmax(log_density)
+            y_pred_ = action_pred_many[idx][None, :]
+    else:
+        y_pred_ = model.sample_extra(x_eval_, extra_steps=extra_diffusion_step).detach().cpu().numpy()
 
 
 if __name__ == '__main__':

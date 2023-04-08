@@ -117,7 +117,7 @@ def train(n_epoch, lrate, device, n_hidden, batch_size, n_T, net_type):
             pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
             optim.step()
 
-            torch.save(model.state_dict(), 'diffusion_prior.pt')
+            torch.save(model, 'diffusion_prior.pt')
 
         results_ep.append(loss_ep / n_batch)
 
