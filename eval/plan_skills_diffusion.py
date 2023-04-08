@@ -93,7 +93,7 @@ def evaluate(args):
     skill_model.load_state_dict(checkpoint['model_state_dict'])
     skill_model.eval()
 
-    diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt')).to(args.device)
+    diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
 
     diffusion_model = Model_Cond_Diffusion(
         diffusion_nn_model,
