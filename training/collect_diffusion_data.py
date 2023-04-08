@@ -63,7 +63,7 @@ def collect_data(args):
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
 
     np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
-    np.save('data/' + args.skill_model_filename[:-4] + '_latent.npy', latent_gt)
+    np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
 
 
 if __name__ == '__main__':
