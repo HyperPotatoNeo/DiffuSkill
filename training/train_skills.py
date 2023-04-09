@@ -56,7 +56,7 @@ def test(model, test_state_decoder):
 
 	return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses)
 
-batch_size = 100
+batch_size = 128
 
 h_dim = 256
 z_dim = 64
@@ -67,7 +67,7 @@ stride = 1
 n_epochs = 50000
 test_split = .2
 a_dist = 'normal' # 'tanh_normal' or 'normal'
-encoder_type = 'gru' #'state_sequence'
+encoder_type = 'transformer' #'state_sequence'
 state_decoder_type = 'autoregressive'
 policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
@@ -112,7 +112,7 @@ action_chunks_test = dataset['actions_test']
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
 
-model = SkillModel(state_dim,a_dim,z_dim,h_dim,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior).cuda()
+model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
 filename = 'skill_model_'+env_name+'_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)
