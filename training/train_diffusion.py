@@ -113,7 +113,7 @@ def train(args):
             pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
             optim.step()
 
-        torch.save(model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
+        torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
 
         results_ep.append(loss_ep / n_batch)
 
@@ -123,8 +123,8 @@ def train(args):
         loss_ep, n_batch = 0, 0
 
         for x_batch, y_batch in pbar:
-            x_batch = x_batch.type(torch.FloatTensor).to(device)
-            y_batch = y_batch.type(torch.FloatTensor).to(device)
+            x_batch = x_batch.type(torch.FloatTensor).to(args.device)
+            y_batch = y_batch.type(torch.FloatTensor).to(args.device)
             loss = model.loss_on_batch(x_batch, y_batch)
             loss_ep += loss.detach().item()
             n_batch += 1
@@ -132,7 +132,7 @@ def train(args):
 
         if loss_ep < best_test_loss:
             best_test_loss = loss_ep
-            torch.save(model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
+            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
             # skill_model.diffusion_prior = model
             # torch.save({'model_state_dict': model.state_dict(),
             #             'optimizer_state_dict': optimizer.state_dict()}, os.path.join(args.checkpoint_dir, args.skill_model_path))
