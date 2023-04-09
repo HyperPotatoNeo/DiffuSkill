@@ -454,6 +454,9 @@ class Model_Cond_Diffusion(nn.Module):
                 x0 = eps
                 eps = 1 / self.sqrtmab[i] * (y_i - self.sqrtab[i] * x0)
 
+            # x0 = torch.clip((1 / self.sqrtab[i]) * (y_i - self.sqrtmab[i] * eps), -1.0, 1.0)
+            # y_i = ((1 / self.oneover_sqrta[i]) * (1 - self.alphabar_t[i - 1])) / (1 - self.alphabar_t[i]) * y_i + ((self.sqrtab[i - 1] * (1 - self.alpha_t[i])) / (1 - self.alphabar_t[i])) * x0
+
             y_i = self.oneover_sqrta[i] * (y_i - eps * self.mab_over_sqrtmab[i]) + self.sqrt_beta_t[i] * z
             if return_y_trace and (i % 20 == 0 or i == self.n_T or i < 8):
                 y_i_store.append(y_i.detach().cpu().numpy())
