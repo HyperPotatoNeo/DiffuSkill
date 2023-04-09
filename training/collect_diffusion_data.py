@@ -24,6 +24,7 @@ def collect_data(args):
                              a_dim,
                              args.z_dim,
                              args.h_dim,
+                             args.horizon,
                              a_dist=args.a_dist,
                              beta=args.beta,
                              fixed_sig=None,
