@@ -17,6 +17,44 @@ from models.diffusion_models import (
 from models.skill_model import SkillModel
 
 
+def greedy_policy(
+        diffusion_model,
+        skill_model,
+        state_0,
+        goal_state,
+        state_mean,
+        state_std,
+        latent_mean,
+        latent_std,
+        num_parallel_envs,
+        num_diffusion_samples,
+        extra_steps,
+        planning_depth,
+        predict_noise,
+    ):
+
+    state = state_0.repeat_interleave(num_diffusion_samples, 0)
+
+    latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
+
+    state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+
+    for depth in range(1, planning_depth):
+        latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
+        state, _ = skill_model.decoder.abstract_dynamics(state, latent)
+
+    best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
+
+    for env_idx in range(num_parallel_envs):
+        start_idx = env_idx * num_diffusion_samples
+        end_idx = start_idx + num_diffusion_samples
+
+        cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
+        best_latent[env_idx] = latent_0[start_idx + torch.argmin(cost)]
+
+    return best_latent
+
+
 def eval_func(diffusion_model,
               skill_model,
               envs,
@@ -53,24 +91,22 @@ def eval_func(diffusion_model,
             env_step = 0
 
             while env_step < 1000:
-                state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
-                latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
-
-                state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
-
-                for depth in range(1, planning_depth):
-                    latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
-                    state, _ = skill_model.decoder.abstract_dynamics(state, latent)
-
-                best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
-
-                for env_idx in range(len(envs)):
-                    start_idx = env_idx * num_diffusion_samples
-                    end_idx = start_idx + num_diffusion_samples
-
-                    cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
-                    best_latent[env_idx] = latent_0[start_idx + torch.argmin(cost)]
+                best_latent = greedy_policy(
+                                diffusion_model,
+                                skill_model,
+                                state_0,
+                                goal_state,
+                                state_mean,
+                                state_std,
+                                latent_mean,
+                                latent_std,
+                                num_parallel_envs,
+                                num_diffusion_samples,
+                                extra_steps,
+                                planning_depth,
+                                predict_noise,
+                            )
 
                 for _ in range(exec_horizon):
                     for env_idx in range(len(envs)):
