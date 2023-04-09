@@ -28,6 +28,8 @@ def eval_func(diffusion_model,
               num_diffusion_samples,
               extra_steps,
               planning_depth,
+              exec_horizon,
+              predict_noise,
               render):
 
     assert num_evals % num_parallel_envs == 0
@@ -45,11 +47,12 @@ def eval_func(diffusion_model,
         for env_step in range(1001):
             state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
-            latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, extra_steps=extra_steps)
+            latent_0 = diffusion_model.sample((state - state_mean) / state_std, predict_noise=predict_noise)
+
             state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
 
             for depth in range(1, planning_depth):
-                latent = diffusion_model.sample_extra((state - state_mean) / state_std, extra_steps=extra_steps)
+                latent = diffusion_model.sample((state - state_mean) / state_std, predict_noise=predict_noise)
                 state, _ = skill_model.decoder.abstract_dynamics(state, latent)
 
             best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
@@ -62,12 +65,13 @@ def eval_func(diffusion_model,
                 best_latent[env_idx] = latent_0[start_idx + torch.argmin(cost)]
 
             for env_idx in range(len(envs)):
-                action = skill_model.decoder.ll_policy.numpy_policy(state_0[env_idx], best_latent[env_idx])
-                new_state, _, _, _ = envs[env_idx].step(action)
-                state_0[env_idx] = torch.from_numpy(new_state)
+                for i in range(exec_horizon):
+                    action = skill_model.decoder.ll_policy.numpy_policy(state_0[env_idx], best_latent[env_idx])
+                    new_state, _, _, _ = envs[env_idx].step(action)
+                    state_0[env_idx] = torch.from_numpy(new_state)
 
-            if render:
-                envs[0].render()
+                    if render:
+                        envs[0].render()
 
 
 def evaluate(args):
@@ -126,6 +130,8 @@ def evaluate(args):
               args.num_diffusion_samples,
               args.extra_steps,
               args.planning_depth,
+              args.exec_horizon,
+              args.predict_noise,
               args.render,
               )
 
@@ -148,6 +154,8 @@ if __name__ == "__main__":
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--planning_depth', type=int, default=3)
     parser.add_argument('--extra_steps', type=int, default=4)
+    parser.add_argument('--predict_noise', type=int, default=0)
+    parser.add_argument('--exec_horizon', type=int, default=40)
 
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--a_dist', type=str, default='normal')
