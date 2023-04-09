@@ -50,7 +50,6 @@ def collect_data(args):
 
     states_gt = np.zeros((inputs_train.shape[0], state_dim))
     latent_gt = np.zeros((inputs_train.shape[0], args.z_dim))
-    sT_gt = np.zeros((inputs_train.shape[0], state_dim))
 
     for batch_id, data in enumerate(train_loader):
         data = data.to(args.device)
@@ -60,19 +59,18 @@ def collect_data(args):
         start_idx = batch_id * args.batch_size
         end_idx = start_idx + args.batch_size
         states_gt[start_idx : end_idx] = states[:, 0, :skill_model.state_dim].cpu().numpy()
-        sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
         output, _ = skill_model.encoder(states, actions)
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
 
     np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
     np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
-    np.sav('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
 
 
 if __name__ == '__main__':
 
     parser = ArgumentParser()
 
+    parser.add_argument('--collect_data', type=int, default=1)
     parser.add_argument('--env', type=str, default='antmaze-large-diverse-v2')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
@@ -93,4 +91,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    collect_data(args)
+    if args.collect_data:
+        collect_data(args)
