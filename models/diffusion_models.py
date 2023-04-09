@@ -310,7 +310,7 @@ class Model_Cond_Diffusion(nn.Module):
         self.y_dim = y_dim
         self.guide_w = guide_w
 
-    def loss_on_batch(self, x_batch, y_batch):
+    def loss_on_batch(self, x_batch, y_batch, predict_noise=True):
         _ts = torch.randint(1, self.n_T + 1, (y_batch.shape[0], 1)).to(self.device)
 
         # dropout context with some probability
@@ -326,9 +326,12 @@ class Model_Cond_Diffusion(nn.Module):
         noise_pred_batch = self.nn_model(y_t, x_batch, _ts / self.n_T, context_mask)
 
         # return mse between predicted and true noise
-        return self.loss_mse(noise, noise_pred_batch)
+        if predict_noise:
+            return self.loss_mse(noise, noise_pred_batch)
+        else:
+            return self.loss_mse(y_batch, noise_pred_batch)
 
-    def sample(self, x_batch, return_y_trace=False, extract_embedding=False):
+    def sample(self, x_batch, return_y_trace=False, extract_embedding=False, predict_noise=True):
         # also use this as a shortcut to avoid doubling batch when guide_w is zero
         is_zero = False
         if self.guide_w > -1e-3 and self.guide_w < 1e-3:
@@ -382,6 +385,11 @@ class Model_Cond_Diffusion(nn.Module):
                 eps2 = eps[n_sample:]
                 eps = (1 + self.guide_w) * eps1 - self.guide_w * eps2
                 y_i = y_i[:n_sample]
+
+            if not predict_noise:
+                x0 = eps
+                eps = 1 / self.sqrtmab[i] * (y_i - self.sqrtab[i] * x0)
+
             y_i = self.oneover_sqrta[i] * (y_i - eps * self.mab_over_sqrtmab[i]) + self.sqrt_beta_t[i] * z
             if return_y_trace and (i % 20 == 0 or i == self.n_T or i < 8):
                 y_i_store.append(y_i.detach().cpu().numpy())
@@ -391,7 +399,7 @@ class Model_Cond_Diffusion(nn.Module):
         else:
             return y_i
 
-    def sample_extra(self, x_batch, extra_steps=4, return_y_trace=False):
+    def sample_extra(self, x_batch, extra_steps=4, return_y_trace=False, predict_noise=True):
         # also use this as a shortcut to avoid doubling batch when guide_w is zero
         is_zero = False
         if self.guide_w > -1e-3 and self.guide_w < 1e-3:
@@ -441,6 +449,11 @@ class Model_Cond_Diffusion(nn.Module):
                 eps2 = eps[n_sample:]
                 eps = (1 + self.guide_w) * eps1 - self.guide_w * eps2
                 y_i = y_i[:n_sample]
+
+            if not predict_noise:
+                x0 = eps
+                eps = 1 / self.sqrtmab[i] * (y_i - self.sqrtab[i] * x0)
+
             y_i = self.oneover_sqrta[i] * (y_i - eps * self.mab_over_sqrtmab[i]) + self.sqrt_beta_t[i] * z
             if return_y_trace and (i % 20 == 0 or i == self.n_T or i < 8):
                 y_i_store.append(y_i.detach().cpu().numpy())
