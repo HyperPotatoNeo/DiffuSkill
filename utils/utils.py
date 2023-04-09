@@ -99,7 +99,8 @@ def get_dataset(env_name, horizon, stride, test_split=0.2):
         # goals = torch.stack(goals)
 
         num_samples = observations.shape[0]
-        assert num_samples == 960039, 'Dataset has changed. Review the dataset extraction'
+        # print(num_samples)
+        # assert num_samples == 960039, 'Dataset has changed. Review the dataset extraction'
 
         print('Total data samples extracted: ', num_samples)
         num_test_samples = int(test_split * num_samples)

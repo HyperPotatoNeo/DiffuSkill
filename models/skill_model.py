@@ -63,7 +63,7 @@ class AutoregressiveStateDecoder(nn.Module):
 	def __init__(self,state_dim,z_dim,h_dim,per_element_sigma=True):
 
 		super(AutoregressiveStateDecoder,self).__init__()
-		self.decoder_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist='normal',max_sig=max_sig,fixed_sig=fixed_sig) for i in range(state_dim)])
+		self.decoder_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist='normal') for i in range(state_dim)])
 		self.state_dim = state_dim
 
 	def forward(self,state,s_T,z):
