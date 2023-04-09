@@ -36,8 +36,11 @@ class PriorDataset(Dataset):
 
         self.state_mean = self.state_all.mean(axis=0)
         self.state_std = self.state_all.std(axis=0)
-
         self.state_all = (self.state_all - self.state_mean) / self.state_std
+
+        self.latent_mean = self.latent_all.mean(axis=0)
+        self.latent_std = self.latent_all.std(axis=0)
+        self.latent_all = (self.latent_all - self.latent_mean) / self.latent_std
 
     def __len__(self):
         return self.state_all.shape[0]
@@ -105,7 +108,7 @@ def train(args):
         for x_batch, y_batch in pbar:
             x_batch = x_batch.type(torch.FloatTensor).to(args.device)
             y_batch = y_batch.type(torch.FloatTensor).to(args.device)
-            loss = model.loss_on_batch(x_batch, y_batch)
+            loss = model.loss_on_batch(x_batch, y_batch, args.predict_noise)
             optim.zero_grad()
             loss.backward()
             loss_ep += loss.detach().item()
@@ -125,7 +128,7 @@ def train(args):
         for x_batch, y_batch in pbar:
             x_batch = x_batch.type(torch.FloatTensor).to(args.device)
             y_batch = y_batch.type(torch.FloatTensor).to(args.device)
-            loss = model.loss_on_batch(x_batch, y_batch)
+            loss = model.loss_on_batch(x_batch, y_batch, args.predict_noise)
             loss_ep += loss.detach().item()
             n_batch += 1
             pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
@@ -156,6 +159,7 @@ if __name__ == "__main__":
     parser.add_argument('--drop_prob', type=float, default=0.0)
     parser.add_argument('--diffusion_steps', type=int, default=50)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
+    parser.add_argument('--predict_noise', type=int, default=0)
 
     args = parser.parse_args()
 

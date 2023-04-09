@@ -23,6 +23,8 @@ def eval_func(diffusion_model,
               state_dim,
               state_mean,
               state_std,
+              latent_mean,
+              latent_std,
               num_evals,
               num_parallel_envs,
               num_diffusion_samples,
@@ -53,12 +55,12 @@ def eval_func(diffusion_model,
             while env_step < 1000:
                 state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
-                latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps)
+                latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
                 state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
 
                 for depth in range(1, planning_depth):
-                    latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps)
+                    latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
                     state, _ = skill_model.decoder.abstract_dynamics(state, latent)
 
                 best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
@@ -101,6 +103,7 @@ def evaluate(args):
                              a_dim,
                              args.z_dim,
                              args.h_dim,
+                             args.horizon,
                              a_dist=args.a_dist,
                              beta=args.beta,
                              fixed_sig=None,
@@ -134,12 +137,18 @@ def evaluate(args):
     state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
     state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
 
+    latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_latents.npy"), allow_pickle=True)
+    latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
+    latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
+
     eval_func(diffusion_model,
               skill_model,
               envs,
               state_dim,
               state_mean,
               state_std,
+              latent_mean,
+              latent_std,
               args.num_evals,
               args.num_parallel_envs,
               args.num_diffusion_samples,
@@ -181,6 +190,7 @@ if __name__ == "__main__":
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
     parser.add_argument('--z_dim', type=int, default=256)
+    parser.add_argument('--horizon', type=int, default=40)
 
     parser.add_argument('--render', type=int, default=1)
 
