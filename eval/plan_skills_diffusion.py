@@ -55,8 +55,49 @@ def greedy_policy(
     return best_latent
 
 
+def exhaustive_policy(
+        diffusion_model,
+        skill_model,
+        state_0,
+        goal_state,
+        state_mean,
+        state_std,
+        latent_mean,
+        latent_std,
+        num_parallel_envs,
+        num_diffusion_samples,
+        extra_steps,
+        planning_depth,
+        predict_noise,
+    ):
+
+    state = state_0.repeat_interleave(num_diffusion_samples, 0)
+
+    latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
+
+    state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+
+    for depth in range(1, planning_depth):
+        state = state.repeat_interleave(num_diffusion_samples, 0)
+        latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
+        state, _ = skill_model.decoder.abstract_dynamics(state, latent)
+
+    best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
+
+    for env_idx in range(num_parallel_envs):
+        start_idx = env_idx * (num_diffusion_samples ** planning_depth)
+        end_idx = start_idx + (num_diffusion_samples ** planning_depth)
+
+        cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
+
+        best_latent[env_idx] = latent_0[(env_idx * num_diffusion_samples) + torch.argmin(cost) // (num_diffusion_samples ** (planning_depth - 1))]
+
+    return best_latent
+
+
 def eval_func(diffusion_model,
               skill_model,
+              policy,
               envs,
               state_dim,
               state_mean,
@@ -92,7 +133,7 @@ def eval_func(diffusion_model,
 
             while env_step < 1000:
 
-                best_latent = greedy_policy(
+                best_latent = policy(
                                 diffusion_model,
                                 skill_model,
                                 state_0,
@@ -177,8 +218,16 @@ def evaluate(args):
     latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
     latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
 
+    if args.policy == 'greedy':
+        policy_fn = greedy_policy
+    elif args.policy == 'exhaustive':
+        policy_fn = exhaustive_policy
+    else:
+        raise NotImplementedError
+
     eval_func(diffusion_model,
               skill_model,
+              policy_fn,
               envs,
               state_dim,
               state_mean,
@@ -209,6 +258,7 @@ if __name__ == "__main__":
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--diffusion_model_filename', type=str)
 
+    parser.add_argument('--policy', type=str, default='greedy')
     parser.add_argument('--num_diffusion_samples', type=int, default=50)
     parser.add_argument('--diffusion_steps', type=int, default=50)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
