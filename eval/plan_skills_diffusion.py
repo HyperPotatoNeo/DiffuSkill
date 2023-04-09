@@ -53,7 +53,7 @@ def greedy_policy(
     latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
     if args.state_decoder_type == 'autoregressive':
-        state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent_0, evaluation=True)
+        state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
         state = state.squeeze(1)
     else:
         state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
@@ -62,7 +62,7 @@ def greedy_policy(
         latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
         if args.state_decoder_type == 'autoregressive':
-            state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent, evaluation=True)
+            state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
             state = state.squeeze(1)
         else:
             state, _ = skill_model.decoder.abstract_dynamics(state, latent)
@@ -108,12 +108,20 @@ def exhaustive_policy(
 
     latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
-    state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+    if args.state_decoder_type == 'autoregressive':
+        state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
+        state = state.squeeze(1)
+    else:
+        state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
 
     for depth in range(1, planning_depth):
         state = state.repeat_interleave(num_diffusion_samples, 0)
         latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
-        state, _ = skill_model.decoder.abstract_dynamics(state, latent)
+        if args.state_decoder_type == 'autoregressive':
+            state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
+            state = state.squeeze(1)
+        else:
+            state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
 
     best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
