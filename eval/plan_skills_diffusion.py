@@ -32,60 +32,61 @@ def eval_func(diffusion_model,
               predict_noise,
               render):
 
-    assert num_evals % num_parallel_envs == 0
-    num_evals = num_evals // num_parallel_envs
+    with torch.no_grad():
+        assert num_evals % num_parallel_envs == 0
+        num_evals = num_evals // num_parallel_envs
 
-    success_evals = 0
+        success_evals = 0
 
-    for eval_step in range(num_evals):
-        state_0 = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
-        goal_state = torch.zeros((num_parallel_envs, 2)).to(args.device)
-        done = [False] * num_parallel_envs
-
-        for env_idx in range(len(envs)):
-            state_0[env_idx] = torch.from_numpy(envs[env_idx].reset())
-            goal_state[env_idx][0] = envs[env_idx].target_goal[0]
-            goal_state[env_idx][1] = envs[env_idx].target_goal[1]
-
-        env_step = 0
-
-        while env_step < 1000:
-            state = state_0.repeat_interleave(num_diffusion_samples, 0)
-
-            latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps)
-
-            state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
-
-            for depth in range(1, planning_depth):
-                latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps)
-                state, _ = skill_model.decoder.abstract_dynamics(state, latent)
-
-            best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
+        for eval_step in range(num_evals):
+            state_0 = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
+            goal_state = torch.zeros((num_parallel_envs, 2)).to(args.device)
+            done = [False] * num_parallel_envs
 
             for env_idx in range(len(envs)):
-                start_idx = env_idx * num_diffusion_samples
-                end_idx = start_idx + num_diffusion_samples
+                state_0[env_idx] = torch.from_numpy(envs[env_idx].reset())
+                goal_state[env_idx][0] = envs[env_idx].target_goal[0]
+                goal_state[env_idx][1] = envs[env_idx].target_goal[1]
 
-                cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
-                best_latent[env_idx] = latent_0[start_idx + torch.argmin(cost)]
+            env_step = 0
 
-            for _ in range(exec_horizon):
+            while env_step < 1000:
+                state = state_0.repeat_interleave(num_diffusion_samples, 0)
+
+                latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps)
+
+                state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+
+                for depth in range(1, planning_depth):
+                    latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps)
+                    state, _ = skill_model.decoder.abstract_dynamics(state, latent)
+
+                best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
+
                 for env_idx in range(len(envs)):
-                    if not done[env_idx]:
-                        action = skill_model.decoder.ll_policy.numpy_policy(state_0[env_idx], best_latent[env_idx])
-                        new_state, reward, done[env_idx], _ = envs[env_idx].step(action)
-                        success_evals += reward
-                        state_0[env_idx] = torch.from_numpy(new_state)
+                    start_idx = env_idx * num_diffusion_samples
+                    end_idx = start_idx + num_diffusion_samples
 
-                        if render and env_idx == 0:
-                            envs[env_idx].render()
+                    cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
+                    best_latent[env_idx] = latent_0[start_idx + torch.argmin(cost)]
 
-                env_step += 1
-                if env_step > 1000:
-                    break
+                for _ in range(exec_horizon):
+                    for env_idx in range(len(envs)):
+                        if not done[env_idx]:
+                            action = skill_model.decoder.ll_policy.numpy_policy(state_0[env_idx], best_latent[env_idx])
+                            new_state, reward, done[env_idx], _ = envs[env_idx].step(action)
+                            success_evals += reward
+                            state_0[env_idx] = torch.from_numpy(new_state)
 
-        total_runs = (eval_step + 1) * num_parallel_envs
-        print(f'Total successful evaluations: {success_evals} out of {total_runs} i.e. {success_evals / total_runs * 100}%')
+                            if render and env_idx == 0:
+                                envs[env_idx].render()
+
+                    env_step += 1
+                    if env_step > 1000:
+                        break
+
+            total_runs = (eval_step + 1) * num_parallel_envs
+            print(f'Total successful evaluations: {success_evals} out of {total_runs} i.e. {success_evals / total_runs * 100}%')
 
 
 def evaluate(args):
