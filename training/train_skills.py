@@ -11,6 +11,7 @@ import h5py
 from utils.utils import get_dataset
 import os
 import pickle
+import argparse
 
 def train(model, optimizer, train_state_decoder):
 	losses = []
@@ -71,10 +72,15 @@ state_decoder_type = 'autoregressive'
 policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = True
-start_training_state_decoder_after = 20
+start_training_state_decoder_after = 0
 
-beta = 1.0 # 0.1, 0.01, 0.001
-conditional_prior = True
+parser = argparse.ArgumentParser()
+parser.add_argument('--beta', type=float, default=1.0)
+parser.add_argument('--conditional_prior', type=int, default=1)
+args = parser.parse_args()
+
+beta = args.beta # 1.0 # 0.1, 0.01, 0.001
+conditional_prior = args.conditional_prior # True
 
 env_name = 'antmaze-large-diverse-v2'
 #env_name = 'kitchen-partial-v0'
