@@ -573,7 +573,7 @@ class SkillModel(nn.Module):
         # STEP 3. Pass z_sampled and states through decoder 
         if state_decoder:
             s_T_mean, s_T_sig, a_means, a_sigs = self.decoder(states, actions, z_sampled, state_decoder)
-            return s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs
+            return s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled
         else:
             a_means, a_sigs = self.decoder(states, actions, z_sampled, state_decoder)
             return a_means, a_sigs, z_post_means, z_post_sigs, z_sampled
