@@ -107,6 +107,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2):
 
         test_indices = np.random.choice(np.arange(num_samples), num_test_samples, replace=False)
         train_indices = np.array(list(set(np.arange(num_samples)) - set(test_indices)))
+        np.random.shuffle(train_indices)
 
         observations_train = observations[train_indices]
         actions_train = actions[train_indices]
