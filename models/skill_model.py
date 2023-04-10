@@ -66,11 +66,11 @@ class AutoregressiveStateDecoder(nn.Module):
         self.decoder_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist='normal') for i in range(state_dim)])
         self.state_dim = state_dim
 
-    def forward(self,state,s_T,z):
+    def forward(self,state,s_T,z, evaluation=False):
         '''
         INPUTS:
-            state: batch_size x T x state_dim tensor of states 
-            action: batch_size x T x a_dim tensor of actions
+            state: batch_size x 1 x state_dim tensor of states 
+            action: batch_size x 1 x a_dim tensor of actions
             z:     batch_size x 1 x z_dim tensor of states
         OUTPUTS:
             a_mean: batch_size x T x a_dim tensor of action means for each t in {0.,,,.T}
@@ -81,14 +81,25 @@ class AutoregressiveStateDecoder(nn.Module):
         '''
         s_means = []
         s_sigs = []
+
+        s_means_tensor = torch.zeros_like(state)
+        s_sigs_tensor = torch.zeros_like(state)
+
         for i in range(self.state_dim):
             # Concat state, and a up to i.  state_a takes place of state in orginary policy.
-            state_a = torch.cat([state,s_T[:,:,:i]],dim=-1)
+            if not evaluation:
+                state_a = torch.cat([state, s_T[:,:,:i]],dim=-1)
+            else:
+                state_a = torch.cat([state, s_means_tensor[:, :, :i]], dim=-1)
             # pass through ith policy component
             s_T_mean_i,s_T_sig_i = self.decoder_components[i](state_a,z) # these are batch_size x T x 1
             # add to growing list of policy elements
             s_means.append(s_T_mean_i)
             s_sigs.append(s_T_sig_i)
+
+            if evaluation:
+                s_means_tensor = torch.cat(s_means, dim=-1)
+                s_sigs_tensor = torch.cat(s_sigs, dim=-1)
 
         s_means = torch.cat(s_means,dim=-1)
         s_sigs  = torch.cat(s_sigs, dim=-1)
