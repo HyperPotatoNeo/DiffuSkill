@@ -6,6 +6,9 @@ import torch
 import random
 import gym
 import d4rl
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
 from mujoco_py import GlfwContext
 GlfwContext(offscreen=True)
 
@@ -15,6 +18,17 @@ from models.diffusion_models import (
     Model_Cond_Diffusion,
 )
 from models.skill_model import SkillModel
+
+ANTMAZE = plt.imread('img/maze-large.png')
+
+def visualize_states(state_0, states, best_state):
+    plt.imshow(ANTMAZE, extent=[-6, 42, -6, 30])
+    plt.scatter(state_0[:, 0], state_0[:, 1], color='red')
+    plt.scatter(states[:, 0], states[:, 1], color='yellow')
+    plt.scatter(best_state[:, 0], best_state[:, 1], color='green')
+    mng = plt.get_current_fig_manager()
+    mng.resize(*mng.window.maxsize())
+    plt.show()
 
 
 def greedy_policy(
@@ -31,6 +45,7 @@ def greedy_policy(
         extra_steps,
         planning_depth,
         predict_noise,
+        visualize,
     ):
 
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
@@ -43,6 +58,7 @@ def greedy_policy(
         latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
         state, _ = skill_model.decoder.abstract_dynamics(state, latent)
 
+    best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
 
     for env_idx in range(num_parallel_envs):
@@ -50,7 +66,14 @@ def greedy_policy(
         end_idx = start_idx + num_diffusion_samples
 
         cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
-        best_latent[env_idx] = latent_0[start_idx + torch.argmin(cost)]
+
+        min_idx = torch.argmin(cost)
+
+        best_state[env_idx] = state[start_idx + min_idx]
+        best_latent[env_idx] = latent_0[start_idx + min_idx]
+
+    if visualize:
+        visualize_states(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy())
 
     return best_latent
 
@@ -69,6 +92,7 @@ def exhaustive_policy(
         extra_steps,
         planning_depth,
         predict_noise,
+        visualize,
     ):
 
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
@@ -82,6 +106,7 @@ def exhaustive_policy(
         latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
         state, _ = skill_model.decoder.abstract_dynamics(state, latent)
 
+    best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
 
     for env_idx in range(num_parallel_envs):
@@ -90,7 +115,13 @@ def exhaustive_policy(
 
         cost = torch.linalg.norm(state[start_idx : end_idx][:, :2] - goal_state[env_idx], axis=1)
 
-        best_latent[env_idx] = latent_0[(env_idx * num_diffusion_samples) + torch.argmin(cost) // (num_diffusion_samples ** (planning_depth - 1))]
+        min_idx = torch.argmin(cost)
+
+        best_state[env_idx] = state[(env_idx * num_diffusion_samples ** planning_depth) + min_idx]
+        best_latent[env_idx] = latent_0[(env_idx * num_diffusion_samples ** planning_depth) + min_idx // (num_diffusion_samples ** (planning_depth - 1))]
+
+    if visualize:
+        visualize_states(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy())
 
     return best_latent
 
@@ -111,6 +142,7 @@ def eval_func(diffusion_model,
               planning_depth,
               exec_horizon,
               predict_noise,
+              visualize,
               render):
 
     with torch.no_grad():
@@ -147,6 +179,7 @@ def eval_func(diffusion_model,
                                 extra_steps,
                                 planning_depth,
                                 predict_noise,
+                                visualize
                             )
 
                 for _ in range(exec_horizon):
@@ -241,6 +274,7 @@ def evaluate(args):
               args.planning_depth,
               args.exec_horizon,
               args.predict_noise,
+              args.visualize,
               args.render,
               )
 
@@ -279,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument('--horizon', type=int, default=40)
 
     parser.add_argument('--render', type=int, default=1)
+    parser.add_argument('--visualize', type=int, default=0)
 
     args = parser.parse_args()
 
