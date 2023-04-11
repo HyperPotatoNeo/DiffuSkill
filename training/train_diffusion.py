@@ -19,20 +19,11 @@ from models.diffusion_models import (
 
 class PriorDataset(Dataset):
     def __init__(
-        self, dataset_dir, filename, train_or_test="train", train_prop=0.90
+        self, dataset_dir, filename, train_or_test, test_prop
     ):
         # just load it all into RAM
         self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
         self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
-        n_train = int(self.state_all.shape[0] * train_prop)
-        if train_or_test == "train":
-            self.state_all = self.state_all[:n_train]
-            self.latent_all = self.latent_all[:n_train]
-        elif train_or_test == "test":
-            self.state_all = self.state_all[n_train:]
-            self.latent_all = self.latent_all[n_train:]
-        else:
-            raise NotImplementedError
 
         self.state_mean = self.state_all.mean(axis=0)
         self.state_std = self.state_all.std(axis=0)
@@ -41,6 +32,16 @@ class PriorDataset(Dataset):
         self.latent_mean = self.latent_all.mean(axis=0)
         self.latent_std = self.latent_all.std(axis=0)
         self.latent_all = (self.latent_all - self.latent_mean) / self.latent_std
+
+        n_train = int(self.state_all.shape[0] * (1 - test_prop))
+        if train_or_test == "train":
+            self.state_all = self.state_all[:n_train]
+            self.latent_all = self.latent_all[:n_train]
+        elif train_or_test == "test":
+            self.state_all = self.state_all[n_train:]
+            self.latent_all = self.latent_all[n_train:]
+        else:
+            raise NotImplementedError
 
     def __len__(self):
         return self.state_all.shape[0]
@@ -60,13 +61,13 @@ def train(args):
 
     # get datasets set up
     torch_data_train = PriorDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", train_prop=0.90
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split
     )
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
     torch_data_test = PriorDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", train_prop=0.90
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split
     )
     dataload_test = DataLoader(
         torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
@@ -125,13 +126,14 @@ def train(args):
         pbar = tqdm(dataload_test)
         loss_ep, n_batch = 0, 0
 
-        for x_batch, y_batch in pbar:
-            x_batch = x_batch.type(torch.FloatTensor).to(args.device)
-            y_batch = y_batch.type(torch.FloatTensor).to(args.device)
-            loss = model.loss_on_batch(x_batch, y_batch, args.predict_noise)
-            loss_ep += loss.detach().item()
-            n_batch += 1
-            pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
+        with torch.no_grad():
+            for x_batch, y_batch in pbar:
+                x_batch = x_batch.type(torch.FloatTensor).to(args.device)
+                y_batch = y_batch.type(torch.FloatTensor).to(args.device)
+                loss = model.loss_on_batch(x_batch, y_batch, args.predict_noise)
+                loss_ep += loss.detach().item()
+                n_batch += 1
+                pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
 
         if loss_ep < best_test_loss:
             best_test_loss = loss_ep
@@ -151,6 +153,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--net_type', type=str, default='transformer')
     parser.add_argument('--n_hidden', type=int, default=512)
+    parser.add_argument('--test_split', type=float, default=0.2)
 
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--dataset_dir', type=str, default='data/')
