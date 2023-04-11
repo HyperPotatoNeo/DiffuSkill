@@ -10,6 +10,11 @@ import torch.distributions.categorical as Categorical
 import torch.distributions.mixture_same_family as MixtureSameFamily
 import torch.distributions.kl as KL
 from utils.utils import reparameterize
+from models.diffusion_models import (
+    Model_mlp,
+    Model_cnn_mlp,
+    Model_Cond_Diffusion,
+)
 
 class AbstractDynamics(nn.Module):
     '''
@@ -90,7 +95,7 @@ class AutoregressiveStateDecoder(nn.Module):
             if not evaluation:
                 state_a = torch.cat([state, s_T[:,:,:i]],dim=-1)
             else:
-                state_a = torch.cat([state, s_means_tensor[:, :, :i]], dim=-1)
+                state_a = torch.cat([state, s_means_tensor[:, :, :i].detach()], dim=-1)
             # pass through ith policy component
             s_T_mean_i,s_T_sig_i = self.decoder_components[i](state_a,z) # these are batch_size x T x 1
             # add to growing list of policy elements
@@ -505,7 +510,7 @@ class GenerativeModel(nn.Module):
 
 
 class SkillModel(nn.Module):
-    def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True):
+    def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True,train_diffusion_prior=False):
         super(SkillModel, self).__init__()
 
         self.state_dim = state_dim # state dimension
@@ -514,6 +519,7 @@ class SkillModel(nn.Module):
         self.state_decoder_type = state_decoder_type
         self.policy_decoder_type = policy_decoder_type
         self.conditional_prior = conditional_prior
+        self.train_diffusion_prior = train_diffusion_prior
         self.diffusion_prior = None
         
         if encoder_type == 'gru':
@@ -525,8 +531,22 @@ class SkillModel(nn.Module):
         if conditional_prior:
             self.prior   = Prior(state_dim,z_dim,h_dim)
             self.gen_model = GenerativeModel(self.decoder,self.prior)
+        if self.train_diffusion_prior:
+            nn_model = Model_mlp(
+                state_dim, 512, z_dim, embed_dim=128, net_type='transformer'
+            ).to('cuda')
+            self.diffusion_prior = Model_Cond_Diffusion(
+                nn_model,
+                betas=(1e-4, 0.02),
+                n_T=100,
+                device='cuda',
+                x_dim=state_dim,
+                y_dim=z_dim,
+                drop_prob=0.0,
+                guide_w=0.0,
+            )
 
-        self.beta    = beta
+        self.beta = beta
 
 
     def forward(self, states, actions, state_decoder):
@@ -553,10 +573,10 @@ class SkillModel(nn.Module):
         # STEP 3. Pass z_sampled and states through decoder 
         if state_decoder:
             s_T_mean, s_T_sig, a_means, a_sigs = self.decoder(states, actions, z_sampled, state_decoder)
-            return s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs
+            return s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled
         else:
             a_means, a_sigs = self.decoder(states, actions, z_sampled, state_decoder)
-            return a_means, a_sigs, z_post_means, z_post_sigs
+            return a_means, a_sigs, z_post_means, z_post_sigs, z_sampled
 
     def get_E_loss(self,states,actions):
 
@@ -628,11 +648,11 @@ class SkillModel(nn.Module):
         s_T = states[:,-1:,:]
 
         if state_decoder:
-            s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs = self.forward(states, actions, state_decoder)
+            s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, actions, state_decoder)
             s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
             s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
         else:
-            a_means, a_sigs, z_post_means, z_post_sigs = self.forward(states, actions, state_decoder)
+            a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, actions, state_decoder)
 
         if self.decoder.ll_policy.a_dist == 'normal':
             a_dist = Normal.Normal(a_means, a_sigs)
@@ -652,16 +672,20 @@ class SkillModel(nn.Module):
             z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs)
 
         a_loss   = -torch.mean(torch.sum(a_dist.log_prob(actions), dim=-1))
-    
         kl_loss = torch.mean(torch.sum(KL.kl_divergence(z_post_dist, z_prior_dist), dim=-1))/T 
 
-        loss_tot = a_loss + self.beta * kl_loss
+        if self.train_diffusion_prior:
+            diffusion_loss = self.diffusion_prior.loss_on_batch(states[:, 0, :], z_sampled[:,0,:].detach(), predict_noise=0)
+        else:
+            diffusion_loss = 0.0
+
+        loss_tot = a_loss + self.beta * kl_loss + diffusion_loss
 
         if state_decoder:
             loss_tot += s_T_loss
-            return  loss_tot, s_T_loss, a_loss, kl_loss
+            return  loss_tot, s_T_loss, a_loss, kl_loss, diffusion_loss
         else:
-            return  loss_tot, a_loss, kl_loss
+            return  loss_tot, a_loss, kl_loss, diffusion_loss
 
 
     def get_expected_cost(self, s0, skill_seq, goal_states):

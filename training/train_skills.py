@@ -21,9 +21,9 @@ def train(model, optimizer, train_state_decoder):
 		states = data[:,:,:model.state_dim]
 		actions = data[:,:,model.state_dim:]
 		if train_state_decoder:
-			loss_tot, s_T_loss, a_loss, kl_loss = model.get_losses(states, actions, train_state_decoder)
+			loss_tot, s_T_loss, a_loss, kl_loss, diffusion_loss = model.get_losses(states, actions, train_state_decoder)
 		else:
-			loss_tot, a_loss, kl_loss = model.get_losses(states, actions, train_state_decoder)
+			loss_tot, a_loss, kl_loss, diffusion_loss = model.get_losses(states, actions, train_state_decoder)
 		model.zero_grad()
 		loss_tot.backward()
 		optimizer.step()
@@ -38,6 +38,7 @@ def test(model, test_state_decoder):
 	a_losses = []
 	kl_losses = []
 	s_T_ents = []
+	diffusion_losses = []
 
 	with torch.no_grad():
 		for batch_id, data in enumerate(test_loader):
@@ -45,16 +46,19 @@ def test(model, test_state_decoder):
 			states = data[:,:,:model.state_dim]
 			actions = data[:,:,model.state_dim:]
 			if test_state_decoder:
-				loss_tot, s_T_loss, a_loss, kl_loss  = model.get_losses(states, actions, test_state_decoder)
+				loss_tot, s_T_loss, a_loss, kl_loss, diffusion_loss  = model.get_losses(states, actions, test_state_decoder)
 				s_T_losses.append(s_T_loss.item())
 			else:
-				loss_tot, a_loss, kl_loss  = model.get_losses(states, actions, test_state_decoder)
+				loss_tot, a_loss, kl_loss, diffusion_loss  = model.get_losses(states, actions, test_state_decoder)
 			# log losses
 			losses.append(loss_tot.item())
 			a_losses.append(a_loss.item())
 			kl_losses.append(kl_loss.item())
+			diffusion_losses.append(diffusion_loss.item())
 
-	return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses)
+	if train_diffusion_prior:
+		return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), np.mean(diffusion_losses)
+	return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), None
 
 batch_size = 128
 
@@ -73,6 +77,7 @@ policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = True
 start_training_state_decoder_after = 0
+train_diffusion_prior = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--beta', type=float, default=1.0)
@@ -90,9 +95,9 @@ with open(dataset_file, "rb") as f:
 	dataset = pickle.load(f)
 
 checkpoint_dir = 'checkpoints/'
-states = dataset['observations']
+states = dataset['observations'][:10000]
 #next_states = dataset['next_observations']
-actions = dataset['actions']
+actions = dataset['actions'][:10000]
 
 N = states.shape[0]
 
@@ -112,10 +117,10 @@ action_chunks_test = dataset['actions_test']
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
 
-model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior).cuda()
+model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
-filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)
+filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_diffusion_prior_'+str(train_diffusion_prior)
 
 if load_from_checkpoint:
 	PATH = os.path.join(checkpoint_dir,filename+'_best_sT.pth')
@@ -138,7 +143,8 @@ experiment.log_parameters({'lr':lr,
 							'state_decoder_type':state_decoder_type,
 							'policy_decoder_type':policy_decoder_type,
 							'per_element_sigma':per_element_sigma,
-       						'conditional_prior': conditional_prior})
+       						'conditional_prior': conditional_prior,
+       						'train_diffusion_prior': train_diffusion_prior})
 
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
 inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
@@ -158,7 +164,7 @@ min_test_s_T_loss = 10**10
 min_test_a_loss = 10**10
 for i in range(n_epochs):
 
-	test_loss, test_s_T_loss, test_a_loss, test_kl_loss = test(model, test_state_decoder = i > start_training_state_decoder_after)
+	test_loss, test_s_T_loss, test_a_loss, test_kl_loss, test_diffusion_loss = test(model, test_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TEST---------")
 	
@@ -166,11 +172,15 @@ for i in range(n_epochs):
 	print('test_s_T_loss: ', test_s_T_loss)
 	print('test_a_loss: ', test_a_loss)
 	print('test_kl_loss: ', test_kl_loss)
+	if test_diffusion_loss is not None:
+		print('test_diffusion_loss ', test_diffusion_loss)
 	print(i)
 	experiment.log_metric("test_loss", test_loss, step=i)
 	experiment.log_metric("test_s_T_loss", test_s_T_loss, step=i)
 	experiment.log_metric("test_a_loss", test_a_loss, step=i)
 	experiment.log_metric("test_kl_loss", test_kl_loss, step=i)
+	if test_diffusion_loss is not None:
+		experiment.log_metric("test_diffusion_loss", test_diffusion_loss, step=i)
 	
 	if test_loss < min_test_loss:
 		min_test_loss = test_loss	
