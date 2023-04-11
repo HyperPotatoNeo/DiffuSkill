@@ -71,14 +71,14 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
         num_trajectories = np.where(dataset['timeouts'])[0].shape[0]
         assert num_trajectories == 999, 'Dataset has changed. Review the dataset extraction'
 
+        if append_goals:
+            dataset['observations'] = np.hstack([dataset['observations'],dataset['infos/goal']])
         print('Total trajectories: ', num_trajectories)
 
         for traj_idx in range(num_trajectories):
             start_idx = traj_idx * 1001
             end_idx = (traj_idx + 1) * 1001
 
-            if append_goals:
-                dataset['observations'] = np.hstack([dataset['observations'],dataset['infos/goal']])
             obs = dataset['observations'][start_idx : end_idx]
             act = dataset['actions'][start_idx : end_idx]
                 
