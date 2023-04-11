@@ -58,7 +58,7 @@ def chunks(obs,actions,H,stride):
 	return torch.stack(obs_chunks),torch.stack(action_chunks)
 
 
-def get_dataset(env_name, horizon, stride, test_split=0.2):
+def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
     env = gym.make(env_name)
     dataset = env.get_dataset()
 
@@ -77,8 +77,11 @@ def get_dataset(env_name, horizon, stride, test_split=0.2):
             start_idx = traj_idx * 1001
             end_idx = (traj_idx + 1) * 1001
 
+            if append_goals:
+                dataset['observations'] = np.hstack([dataset['observations'],dataset['infos/goal']])
             obs = dataset['observations'][start_idx : end_idx]
             act = dataset['actions'][start_idx : end_idx]
+                
             # reward = dataset['rewards'][start_idx : end_idx]
             # goal = dataset['infos/goal'][start_idx : end_idx]
 

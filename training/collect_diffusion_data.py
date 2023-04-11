@@ -37,7 +37,7 @@ def collect_data(args):
     skill_model.load_state_dict(checkpoint['model_state_dict'])
     skill_model.eval()
 
-    dataset = get_dataset(args.env, args.horizon, args.stride, 0.0)
+    dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals)
 
     obs_chunks_train = dataset['observations_train']
     action_chunks_train = dataset['actions_train']
@@ -56,18 +56,23 @@ def collect_data(args):
     for batch_id, data in enumerate(train_loader):
         data = data.to(args.device)
         states = data[:, :, :skill_model.state_dim]
-        actions = data[:, :, skill_model.state_dim:]
+        actions = data[:, :, skill_model.state_dim+2*args.append_goals:]
 
         start_idx = batch_id * args.batch_size
         end_idx = start_idx + args.batch_size
-        states_gt[start_idx : end_idx] = states[:, 0, :skill_model.state_dim].cpu().numpy()
+        states_gt[start_idx : end_idx] = data[:, 0, :skill_model.state_dim+2*args.append_goals].cpu().numpy()
         sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
         output, _ = skill_model.encoder(states, actions)
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
 
-    np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
-    np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
-    np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
+    if not args.append_goals:
+        np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
+    else:
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_states.npy', states_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents.npy', latent_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sT.npy', sT_gt)
 
 
 if __name__ == '__main__':
@@ -79,6 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--append_goals', type=int, default=0)
 
     parser.add_argument('--horizon', type=int, default=40)
     parser.add_argument('--stride', type=int, default=1)

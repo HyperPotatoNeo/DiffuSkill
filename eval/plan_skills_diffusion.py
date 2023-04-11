@@ -46,26 +46,30 @@ def greedy_policy(
         planning_depth,
         predict_noise,
         visualize,
+        append_goals
     ):
-
+    
+    state_dim = state_0.shape[1]
+    if append_goals:
+      state = torch.cat([state,goal_state])
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
     latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
     if args.state_decoder_type == 'autoregressive':
-        state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
-        state = state.squeeze(1)
+        state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
+        state[:,:state_dim] = state_pred.squeeze(1)
     else:
-        state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+        state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent_0)
 
     for depth in range(1, planning_depth):
         latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
         if args.state_decoder_type == 'autoregressive':
-            state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
-            state = state.squeeze(1)
+            state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
+            state[:,:state_dim] = state_pred.squeeze(1)
         else:
-            state, _ = skill_model.decoder.abstract_dynamics(state, latent)
+            state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent)
 
     best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
@@ -78,7 +82,7 @@ def greedy_policy(
 
         min_idx = torch.argmin(cost)
 
-        best_state[env_idx] = state[start_idx + min_idx]
+        best_state[env_idx] = state[start_idx + min_idx, :state_dim]
         best_latent[env_idx] = latent_0[start_idx + min_idx]
 
     if visualize:
@@ -102,26 +106,30 @@ def exhaustive_policy(
         planning_depth,
         predict_noise,
         visualize,
+        append_goals
     ):
 
+    state_dim = state_0.shape[1]
+    if append_goals:
+      state = torch.cat([state,goal_state])
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
     latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
 
     if args.state_decoder_type == 'autoregressive':
-        state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
-        state = state.squeeze(1)
+        state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
+        state[:,:state_dim] = state_pred.squeeze(1)
     else:
-        state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+        state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent_0)
 
     for depth in range(1, planning_depth):
         state = state.repeat_interleave(num_diffusion_samples, 0)
         latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
         if args.state_decoder_type == 'autoregressive':
-            state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
-            state = state.squeeze(1)
+            state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
+            state[:,:state_dim] = state_pred.squeeze(1)
         else:
-            state, _ = skill_model.decoder.abstract_dynamics(state, latent_0)
+            state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent_0)
 
     best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
@@ -134,7 +142,7 @@ def exhaustive_policy(
 
         min_idx = torch.argmin(cost)
 
-        best_state[env_idx] = state[(env_idx * num_diffusion_samples ** planning_depth) + min_idx]
+        best_state[env_idx] = state[(env_idx * num_diffusion_samples ** planning_depth) + min_idx, :state_dim]
         best_latent[env_idx] = latent_0[(env_idx * num_diffusion_samples ** planning_depth) + min_idx // (num_diffusion_samples ** (planning_depth - 1))]
 
     if visualize:
@@ -160,7 +168,8 @@ def eval_func(diffusion_model,
               exec_horizon,
               predict_noise,
               visualize,
-              render):
+              render,
+              append_goals):
 
     with torch.no_grad():
         assert num_evals % num_parallel_envs == 0
@@ -196,7 +205,8 @@ def eval_func(diffusion_model,
                                 extra_steps,
                                 planning_depth,
                                 predict_noise,
-                                visualize
+                                visualize,
+                                append_goals
                             )
 
                 for _ in range(exec_horizon):
@@ -251,7 +261,7 @@ def evaluate(args):
         betas=(1e-4, 0.02),
         n_T=args.diffusion_steps,
         device=args.device,
-        x_dim=state_dim,
+        x_dim=state_dim + args.append_goals*2,
         y_dim=args.z_dim,
         drop_prob=None,
         guide_w=args.cfg_weight,
@@ -260,13 +270,22 @@ def evaluate(args):
 
     envs = [gym.make(args.env) for _ in range(args.num_parallel_envs)]
 
-    state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
-    state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
-    state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
+    if not args.append_goals:
+      state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
+      state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
+      state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
 
-    latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_latents.npy"), allow_pickle=True)
-    latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
-    latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
+      latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_latents.npy"), allow_pickle=True)
+      latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
+      latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
+    else:
+      state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_goals_states.npy"), allow_pickle=True)
+      state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
+      state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
+
+      latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_goals_latents.npy"), allow_pickle=True)
+      latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
+      latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
 
     if args.policy == 'greedy':
         policy_fn = greedy_policy
@@ -293,6 +312,7 @@ def evaluate(args):
               args.predict_noise,
               args.visualize,
               args.render,
+              args.append_goals
               )
 
 
@@ -308,6 +328,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_dir', type=str, default='data')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--diffusion_model_filename', type=str)
+    parser.add_argument('--append_goals', type=int, default=0)
 
     parser.add_argument('--policy', type=str, default='greedy')
     parser.add_argument('--num_diffusion_samples', type=int, default=50)

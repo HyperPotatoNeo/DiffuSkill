@@ -19,11 +19,15 @@ from models.diffusion_models import (
 
 class PriorDataset(Dataset):
     def __init__(
-        self, dataset_dir, filename, train_or_test="train", train_prop=0.90
+        self, dataset_dir, filename, train_or_test="train", train_prop=0.90,, append_goals=False
     ):
         # just load it all into RAM
-        self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
-        self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
+        if append_goals:
+            self.state_all = np.load(os.path.join(dataset_dir, filename + "_goals_states.npy"), allow_pickle=True)
+            self.latent_all = np.load(os.path.join(dataset_dir, filename + "_goals_latents.npy"), allow_pickle=True)
+        else:
+            self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
+            self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
         n_train = int(self.state_all.shape[0] * train_prop)
         if train_or_test == "train":
             self.state_all = self.state_all[:n_train]
@@ -60,16 +64,16 @@ def train(args):
 
     # get datasets set up
     torch_data_train = PriorDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", train_prop=0.90
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", train_prop=0.90, append_goals=args.append_goals
     )
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
     torch_data_test = PriorDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", train_prop=0.90
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", train_prop=0.90, append_goals=args.append_goals
     )
     dataload_test = DataLoader(
-        torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
+        torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0, append_goals=args.append_goals
     )
 
     x_shape = torch_data_train.state_all.shape[1]
@@ -155,6 +159,7 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--dataset_dir', type=str, default='data/')
     parser.add_argument('--skill_model_filename', type=str)
+    parser.add_argument('--append_goals', type=int, default=0)
 
     parser.add_argument('--drop_prob', type=float, default=0.0)
     parser.add_argument('--diffusion_steps', type=int, default=50)
