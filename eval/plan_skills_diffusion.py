@@ -51,7 +51,7 @@ def greedy_policy(
     
     state_dim = state_0.shape[1]
     if append_goals:
-      state = torch.cat([state,goal_state])
+      state_0 = torch.cat([state_0,goal_state],dim=1)
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
     latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
@@ -71,7 +71,7 @@ def greedy_policy(
         else:
             state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent)
 
-    best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
+    best_state = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
 
     for env_idx in range(num_parallel_envs):
@@ -111,7 +111,7 @@ def exhaustive_policy(
 
     state_dim = state_0.shape[1]
     if append_goals:
-      state = torch.cat([state,goal_state])
+      state_0 = torch.cat([state_0,goal_state],dim=1)
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
 
     latent_0 = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
@@ -131,7 +131,7 @@ def exhaustive_policy(
         else:
             state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent_0)
 
-    best_state = torch.zeros((num_parallel_envs, state_0.shape[1])).to(args.device)
+    best_state = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
 
     for env_idx in range(num_parallel_envs):
@@ -340,18 +340,18 @@ if __name__ == "__main__":
     parser.add_argument('--planning_depth', type=int, default=3)
     parser.add_argument('--extra_steps', type=int, default=4)
     parser.add_argument('--predict_noise', type=int, default=0)
-    parser.add_argument('--exec_horizon', type=int, default=40)
+    parser.add_argument('--exec_horizon', type=int, default=30)
 
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--a_dist', type=str, default='normal')
     parser.add_argument('--encoder_type', type=str, default='gru')
     parser.add_argument('--state_decoder_type', type=str, default='mlp')
     parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
-    parser.add_argument('--per_element_sigma', type=int, default=0)
+    parser.add_argument('--per_element_sigma', type=int, default=1)
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
     parser.add_argument('--z_dim', type=int, default=256)
-    parser.add_argument('--horizon', type=int, default=40)
+    parser.add_argument('--horizon', type=int, default=30)
 
     parser.add_argument('--render', type=int, default=1)
     parser.add_argument('--visualize', type=int, default=0)

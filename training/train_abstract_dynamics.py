@@ -36,13 +36,13 @@ class StateDecoderDataset(Dataset):
 
         self.state_mean = self.state_all.mean(axis=0)
         self.state_std = self.state_all.std(axis=0)
-        self.state_all = (self.state_all - self.state_mean) / self.state_std
+        #self.state_all = (self.state_all - self.state_mean) / self.state_std
         #Normalize sT with s0 statistics
-        self.sT_all = (self.sT_all - self.state_mean) / self.state_std
+        #self.sT_all = (self.sT_all - self.state_mean) / self.state_std
 
         self.latent_mean = self.latent_all.mean(axis=0)
         self.latent_std = self.latent_all.std(axis=0)
-        self.latent_all = (self.latent_all - self.latent_mean) / self.latent_std
+        #self.latent_all = (self.latent_all - self.latent_mean) / self.latent_std
 
     def __len__(self):
         return self.state_all.shape[0]
@@ -170,12 +170,12 @@ if __name__ == "__main__":
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--a_dist', type=str, default='normal')
     parser.add_argument('--encoder_type', type=str, default='gru')
-    parser.add_argument('--state_decoder_type', type=str, default='mlp')
+    parser.add_argument('--state_decoder_type', type=str, default='autoregressive')
     parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
-    parser.add_argument('--per_element_sigma', type=int, default=0)
+    parser.add_argument('--per_element_sigma', type=int, default=1)
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
-    parser.add_argument('--z_dim', type=int, default=256)
+    parser.add_argument('--z_dim', type=int, default=64)
 
     args = parser.parse_args()
 
