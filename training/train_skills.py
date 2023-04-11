@@ -54,7 +54,7 @@ def test(model, test_state_decoder):
 			losses.append(loss_tot.item())
 			a_losses.append(a_loss.item())
 			kl_losses.append(kl_loss.item())
-			diffusion_losses.append(diffusion_loss.item())
+			diffusion_losses.append(diffusion_loss.item() if train_diffusion_prior else diffusion_loss)
 
 	if train_diffusion_prior:
 		return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), np.mean(diffusion_losses)
@@ -71,16 +71,16 @@ stride = 1
 n_epochs = 50000
 test_split = .2
 a_dist = 'normal' # 'tanh_normal' or 'normal'
-encoder_type = 'transformer' #'state_sequence'
+encoder_type = 'gru' # 'transformer' #'state_sequence'
 state_decoder_type = 'autoregressive'
 policy_decoder_type = 'autoregressive'
 load_from_checkpoint = False
 per_element_sigma = True
 start_training_state_decoder_after = 0
-train_diffusion_prior = True
+train_diffusion_prior = False
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--beta', type=float, default=1.0)
+parser.add_argument('--beta', type=float, default=1e-5)
 parser.add_argument('--conditional_prior', type=int, default=1)
 args = parser.parse_args()
 
@@ -95,9 +95,9 @@ with open(dataset_file, "rb") as f:
 	dataset = pickle.load(f)
 
 checkpoint_dir = 'checkpoints/'
-states = dataset['observations'][:10000]
+states = dataset['observations'] #[:10000]
 #next_states = dataset['next_observations']
-actions = dataset['actions'][:10000]
+actions = dataset['actions'] #[:10000]
 
 N = states.shape[0]
 
@@ -114,13 +114,13 @@ action_chunks_train = dataset['actions_train']
 obs_chunks_test = dataset['observations_test']
 action_chunks_test = dataset['actions_test']
 
+filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_diffusion_prior_'+str(train_diffusion_prior)
+
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
 
 model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-
-filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_diffusion_prior_'+str(train_diffusion_prior)
 
 if load_from_checkpoint:
 	PATH = os.path.join(checkpoint_dir,filename+'_best_sT.pth')
