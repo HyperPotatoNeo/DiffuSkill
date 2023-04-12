@@ -16,12 +16,15 @@ from models.skill_model import SkillModel, AbstractDynamics, AutoregressiveState
 
 class StateDecoderDataset(Dataset):
     def __init__(
-        self, dataset_dir, filename, train_or_test="train", train_prop=0.90
+        self, dataset_dir, filename, train_or_test="train", train_prop=0.90, sample_z=False
     ):
         # just load it all into RAM
         self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
         self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
         self.sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
+        self.sample_z = sample_z
+        if sample_z:
+            self.latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
         n_train = int(self.state_all.shape[0] * train_prop)
         if train_or_test == "train":
             self.state_all = self.state_all[:n_train]
@@ -50,6 +53,10 @@ class StateDecoderDataset(Dataset):
     def __getitem__(self, index):
         state = self.state_all[index]
         latent = self.latent_all[index]
+        if self.sample_z:
+            latent_std = self.latent_all_std[index]
+            latent = np.random.normal(latent,latent_std)
+            latent = (latent - self.latent_mean) / self.latent_std
         sT = self.sT_all[index]
 
         return (state, latent, sT)
@@ -63,13 +70,13 @@ def train(args):
 
     # get datasets set up
     torch_data_train = StateDecoderDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", train_prop=0.90
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", train_prop=0.90, sample_z=args.sample_z
     )
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
     torch_data_test = StateDecoderDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", train_prop=0.90
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", train_prop=0.90, sample_z=args.sample_z
     )
     dataload_test = DataLoader(
         torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
@@ -164,6 +171,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_epoch', type=int, default=100)
     parser.add_argument('--lrate', type=float, default=1e-4)
     parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--sample_z', type=int, default=0)
 
     parser.add_argument('--horizon', type=int, default=40)
     parser.add_argument('--stride', type=int, default=1)

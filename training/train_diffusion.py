@@ -35,7 +35,7 @@ class PriorDataset(Dataset):
 
         self.state_mean = self.state_all.mean(axis=0)
         self.state_std = self.state_all.std(axis=0)
-        self.state_all = (self.state_all - self.state_mean) / self.state_std
+        #self.state_all = (self.state_all - self.state_mean) / self.state_std
 
         self.latent_mean = self.latent_all.mean(axis=0)
         self.latent_std = self.latent_all.std(axis=0)
@@ -60,6 +60,7 @@ class PriorDataset(Dataset):
         if self.sample_z:
             latent_std = self.latent_all_std[index]
             latent = np.random.normal(latent,latent_std)
+            latent = (latent - self.latent_mean) / self.latent_std
 
         return (state, latent)
 
