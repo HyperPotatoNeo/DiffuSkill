@@ -58,7 +58,7 @@ def chunks(obs,actions,H,stride):
 	return torch.stack(obs_chunks),torch.stack(action_chunks)
 
 
-def get_dataset(env_name, horizon, stride, test_split=0.2):
+def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
     env = gym.make(env_name)
     dataset = env.get_dataset()
 
@@ -71,6 +71,8 @@ def get_dataset(env_name, horizon, stride, test_split=0.2):
         num_trajectories = np.where(dataset['timeouts'])[0].shape[0]
         assert num_trajectories == 999, 'Dataset has changed. Review the dataset extraction'
 
+        if append_goals:
+            dataset['observations'] = np.hstack([dataset['observations'],dataset['infos/goal']])
         print('Total trajectories: ', num_trajectories)
 
         for traj_idx in range(num_trajectories):
@@ -79,6 +81,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2):
 
             obs = dataset['observations'][start_idx : end_idx]
             act = dataset['actions'][start_idx : end_idx]
+                
             # reward = dataset['rewards'][start_idx : end_idx]
             # goal = dataset['infos/goal'][start_idx : end_idx]
 
