@@ -60,10 +60,17 @@ def test(model, test_state_decoder):
 		return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), np.mean(diffusion_losses)
 	return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), None
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--beta', type=float, default=1e-5)
+parser.add_argument('--conditional_prior', type=int, default=1)
+parser.add_argument('--z_dim', type=float, default=64)
+parser.add_argument('--lr', type=float, default=1e-4)
+args = parser.parse_args()
+
 batch_size = 128
 
 h_dim = 256
-z_dim = 64
+z_dim = args.z_dim
 lr = 5e-5
 wd = 0.0
 H = 30
@@ -78,11 +85,6 @@ load_from_checkpoint = False
 per_element_sigma = True
 start_training_state_decoder_after = 0
 train_diffusion_prior = False
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--beta', type=float, default=1e-5)
-parser.add_argument('--conditional_prior', type=int, default=1)
-args = parser.parse_args()
 
 beta = args.beta # 1.0 # 0.1, 0.01, 0.001
 conditional_prior = args.conditional_prior # True
