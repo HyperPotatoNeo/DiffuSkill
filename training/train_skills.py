@@ -65,13 +65,14 @@ parser.add_argument('--beta', type=float, default=1e-5)
 parser.add_argument('--conditional_prior', type=int, default=1)
 parser.add_argument('--z_dim', type=float, default=64)
 parser.add_argument('--lr', type=float, default=1e-4)
+parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
 args = parser.parse_args()
 
 batch_size = 128
 
 h_dim = 256
 z_dim = args.z_dim
-lr = 5e-5
+lr = args.lr#5e-5
 wd = 0.0
 H = 30
 stride = 1
