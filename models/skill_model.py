@@ -243,7 +243,8 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             state_a = torch.cat([state]+actions,dim=-1)
             # pass through ith policy component
             a_mean_i,a_sig_i = self.policy_components[i](state_a,z)  # these are batch_size x T x 1
-            a_i = reparameterize(a_mean_i,a_sig_i)
+            # a_i = reparameterize(a_mean_i,a_sig_i)
+            a_i = a_mean_i
             if self.a_dist == 'tanh_normal':
                 a_i = nn.Tanh()(a_i)
             actions.append(a_i)
