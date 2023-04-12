@@ -23,16 +23,6 @@ class StateDecoderDataset(Dataset):
         self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
         self.sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
         n_train = int(self.state_all.shape[0] * train_prop)
-        if train_or_test == "train":
-            self.state_all = self.state_all[:n_train]
-            self.latent_all = self.latent_all[:n_train]
-            self.sT_all = self.sT_all[:n_train]
-        elif train_or_test == "test":
-            self.state_all = self.state_all[n_train:]
-            self.latent_all = self.latent_all[n_train:]
-            self.sT_all = self.sT_all[n_train:]
-        else:
-            raise NotImplementedError
 
         self.state_mean = self.state_all.mean(axis=0)
         self.state_std = self.state_all.std(axis=0)
@@ -43,6 +33,17 @@ class StateDecoderDataset(Dataset):
         self.latent_mean = self.latent_all.mean(axis=0)
         self.latent_std = self.latent_all.std(axis=0)
         self.latent_all = (self.latent_all - self.latent_mean) / self.latent_std
+
+        if train_or_test == "train":
+            self.state_all = self.state_all[:n_train]
+            self.latent_all = self.latent_all[:n_train]
+            self.sT_all = self.sT_all[:n_train]
+        elif train_or_test == "test":
+            self.state_all = self.state_all[n_train:]
+            self.latent_all = self.latent_all[n_train:]
+            self.sT_all = self.sT_all[n_train:]
+        else:
+            raise NotImplementedError
 
     def __len__(self):
         return self.state_all.shape[0]
