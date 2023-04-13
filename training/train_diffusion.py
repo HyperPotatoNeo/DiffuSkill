@@ -79,7 +79,7 @@ def train(args):
                             'net_type':args.net_type,
                             'sample_z':args.sample_z,
                             'diffusion_steps':args.diffusion_steps,
-                            'skill_model_filename':skill_model_filename})
+                            'skill_model_filename':args.skill_model_filename})
 
     # get datasets set up
     torch_data_train = PriorDataset(

@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import os
+from comet_ml import Experiment
 
 import d4rl
 import gym
@@ -68,6 +69,15 @@ def train(args):
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
 
+    experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
+    experiment.log_parameters({'lrate':args.lrate,
+                            'batch_size':args.batch_size,
+                            'net_type':args.net_type,
+                            'sample_z':args.sample_z,
+                            'state_decoder_type':args.state_decoder_type,
+                            'skill_model_filename':args.skill_model_filename,
+                            'z_dim':args.z_dim})
+
     # get datasets set up
     torch_data_train = StateDecoderDataset(
         args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", train_prop=0.90, sample_z=args.sample_z
@@ -134,6 +144,7 @@ def train(args):
             pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
             optim.step()
 
+        experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
         results_ep.append(loss_ep / n_batch)
         
         # test loop
@@ -154,6 +165,8 @@ def train(args):
             loss_ep += loss.detach().item()
             n_batch += 1
             pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
+
+        experiment.log_metric("test_loss", loss_ep/n_batch, step=ep)
 
         if loss_ep < best_test_loss:
             best_test_loss = loss_ep
