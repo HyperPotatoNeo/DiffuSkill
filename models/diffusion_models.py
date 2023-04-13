@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import math
 
 class TimeSiren(nn.Module):
     def __init__(self, input_dim, emb_dim):
@@ -27,6 +28,134 @@ class FCBlock(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+
+class SinusoidalPositionEmbeddings(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, time):
+        device = time.device
+        half_dim = self.dim // 2
+        embeddings = math.log(10000) / (half_dim - 1)
+        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
+        embeddings = time[:, None] * embeddings[None, :]
+        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1).squeeze(dim=1)
+        return embeddings
+
+
+class ResBlock(nn.Module):
+    def __init__(self, input_dim, t_embed_dim, state_embed_dim):
+        super(ResBlock, self).__init__()
+
+        self.time_layer = nn.Linear(t_embed_dim, input_dim*2)
+        self.state_layer = nn.Linear(state_embed_dim, input_dim)
+        self.layer1 = nn.Linear(2*input_dim, input_dim)
+        self.layer2 = nn.Linear(input_dim, input_dim)
+        self.layer_norm = nn.LayerNorm(input_dim)
+        self.act = nn.GELU()
+
+    def forward(self, x, t, s):
+        t_embed = self.time_layer(t)
+        s_embed = self.layer_norm(self.state_layer(s))
+        h = torch.cat([x,s_embed], dim=1)
+        h = self.layer1(h)
+        h = self.layer_norm(h)
+        scale_shift = t_embed.chunk(2, dim=1)
+        scale, shift = scale_shift
+        h = h * (scale + 1) + shift
+        h = self.act(h)
+        h = self.layer2(h)
+        h = self.layer_norm(h)
+        h = self.act(h)
+        h = h + x
+        return h
+
+
+class UNet(nn.Module):
+    def __init__(self, input_dim=64, state_dim=29, h_dims=[128,32,16,8], nheads=32, time_embed_dim=256, state_embed_dim=256):
+        super(UNet, self).__init__()
+
+        self.input_dim = input_dim
+        self.h_dims = h_dims
+        self.nheads = nheads
+        self.state_dim = state_dim
+        self.time_embed_dim = time_embed_dim
+        self.state_embed_dim = state_embed_dim
+        self.nheads = nheads
+
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(128),
+            nn.Linear(128, time_embed_dim),
+            nn.LayerNorm(time_embed_dim),
+            nn.GELU(),
+            nn.Linear(time_embed_dim, time_embed_dim),
+            nn.LayerNorm(time_embed_dim),
+            nn.GELU()
+        )
+        self.state_mlp = nn.Sequential(
+            nn.Linear(state_dim, state_embed_dim),
+            nn.LayerNorm(state_embed_dim),
+            nn.GELU(),
+            nn.Linear(state_embed_dim, state_embed_dim),
+            nn.LayerNorm(state_embed_dim),
+            nn.GELU()
+        )
+        self.init_layer = nn.Linear(input_dim, h_dims[0])
+        self.final_mlp = nn.Sequential(
+            nn.Linear(h_dims[0], input_dim),
+            #nn.LayerNorm(state_embed_dim),
+            #nn.GELU(),
+            #nn.Linear(z_dim, z_dim)
+        )
+        self.res_block1 = ResBlock(h_dims[0], time_embed_dim, state_embed_dim)
+        self.res_block2 = ResBlock(h_dims[1], time_embed_dim, state_embed_dim)
+        self.res_block3 = ResBlock(h_dims[2], time_embed_dim, state_embed_dim)
+        self.res_block4 = ResBlock(h_dims[3], time_embed_dim, state_embed_dim)
+        self.down1 = nn.Linear(h_dims[0], h_dims[1])
+        self.down2 = nn.Linear(h_dims[1], h_dims[2])
+        self.down3 = nn.Linear(h_dims[2], h_dims[3])
+        self.up1 = nn.Linear(h_dims[3], h_dims[2])
+        self.up2 = nn.Linear(h_dims[2], h_dims[1])
+        self.up3 = nn.Linear(h_dims[1], h_dims[0])
+        self.res_block5 = ResBlock(h_dims[2], time_embed_dim, state_embed_dim)
+        self.res_block6 = ResBlock(h_dims[1], time_embed_dim, state_embed_dim)
+        self.res_block7 = ResBlock(h_dims[0], time_embed_dim, state_embed_dim)
+        self.final_res_block = ResBlock(h_dims[0], time_embed_dim, state_embed_dim)
+        self.layer_norm1 = nn.LayerNorm(h_dims[0])
+        self.layer_norm2 = nn.LayerNorm(h_dims[1])
+        self.layer_norm3 = nn.LayerNorm(h_dims[2])
+        self.layer_norm4 = nn.LayerNorm(h_dims[3])
+        
+
+    def forward(self, x, t, s):
+        t_embed = self.time_mlp(t)
+        s_embed = self.state_mlp(s)
+        x = self.init_layer(x)
+        #Down
+        h1 = self.res_block1(x, t_embed, s_embed)
+        h2 = nn.GELU()(self.layer_norm2(self.down1(h1)))
+        h2 = self.res_block2(h2, t_embed, s_embed)
+        h3 = nn.GELU()(self.layer_norm3(self.down2(h2)))
+        h3 = self.res_block3(h3, t_embed, s_embed)
+        h4 = nn.GELU()(self.layer_norm4(self.down3(h3)))
+        h4 = self.res_block4(h4, t_embed, s_embed)
+        #Up
+        h = nn.GELU()(self.layer_norm3(self.up1(h4)))
+        h = h+h3
+        h = self.res_block5(h, t_embed, s_embed)
+        h = nn.GELU()(self.layer_norm2(self.up2(h)))
+        h = h+h2
+        h = self.res_block6(h, t_embed, s_embed)
+        h = nn.GELU()(self.layer_norm1(self.up3(h)))
+        h = h+h1
+        h = self.res_block7(h, t_embed, s_embed)
+        h = h+x
+        h = self.final_res_block(h, t_embed, s_embed)
+        h = self.final_mlp(h)
+
+        return h
 
 
 class TransformerEncoderBlock(nn.Module):
@@ -103,6 +232,7 @@ class Model_mlp_diff_embed(nn.Module):
         activation="relu",
         net_type="fc",
         use_prev=False,
+        h_dims=[128,32,16,8]
     ):
         super(Model_mlp_diff_embed, self).__init__()
         self.embed_dim = embed_dim  # input embedding dimension
@@ -115,6 +245,10 @@ class Model_mlp_diff_embed(nn.Module):
             self.output_dim = y_dim  # by default, just output size of action space
         else:
             self.output_dim = output_dim  # sometimes overwrite, eg for discretised, mean/variance, mixture density models
+
+        if self.net_type == 'unet':
+            self.unet = UNet(input_dim=y_dim, state_dim=x_dim, h_dims=h_dims, nheads=32, time_embed_dim=256, state_embed_dim=256)
+            return
 
         # embedding NNs
         if self.use_prev:
@@ -172,28 +306,31 @@ class Model_mlp_diff_embed(nn.Module):
 
     def forward(self, y, x, t, context_mask):
         # embed y, x, t
-        if self.use_prev:
-            x_e = self.x_embed_nn(x[:, :int(self.x_dim / 2)])
-            x_e_prev = self.x_embed_nn(x[:, int(self.x_dim / 2):])
+        if self.net_type == 'unet':
+            net_output = self.unet(y, t, x)
         else:
-            x_e = self.x_embed_nn(x)  # no prev hist
-            x_e_prev = None
-        y_e = self.y_embed_nn(y)
-        t_e = self.t_embed_nn(t)
+            if self.use_prev:
+                x_e = self.x_embed_nn(x[:, :int(self.x_dim / 2)])
+                x_e_prev = self.x_embed_nn(x[:, int(self.x_dim / 2):])
+            else:
+                x_e = self.x_embed_nn(x)  # no prev hist
+                x_e_prev = None
+            y_e = self.y_embed_nn(y)
+            t_e = self.t_embed_nn(t)
 
-        # mask out context embedding, x_e, if context_mask == 1
-        context_mask = context_mask.repeat(x_e.shape[1], 1).T
-        x_e = x_e * (-1 * (1 - context_mask))
-        if self.use_prev:
-            x_e_prev = x_e_prev * (-1 * (1 - context_mask))
+            # mask out context embedding, x_e, if context_mask == 1
+            context_mask = context_mask.repeat(x_e.shape[1], 1).T
+            x_e = x_e * (-1 * (1 - context_mask))
+            if self.use_prev:
+                x_e_prev = x_e_prev * (-1 * (1 - context_mask))
 
-        # pass through fc nn
-        if self.net_type == "fc":
-            net_output = self.forward_fcnn(x_e, x_e_prev, y_e, t_e, x, y, t)
+            # pass through fc nn
+            if self.net_type == "fc":
+                net_output = self.forward_fcnn(x_e, x_e_prev, y_e, t_e, x, y, t)
 
-        # or pass through transformer encoder
-        elif self.net_type == "transformer":
-            net_output = self.forward_transformer(x_e, x_e_prev, y_e, t_e, x, y, t)
+            # or pass through transformer encoder
+            elif self.net_type == "transformer":
+                net_output = self.forward_transformer(x_e, x_e_prev, y_e, t_e, x, y, t)
 
         return net_output
 
@@ -323,7 +460,10 @@ class Model_Cond_Diffusion(nn.Module):
         y_t = self.sqrtab[_ts] * y_batch + self.sqrtmab[_ts] * noise
 
         # use nn model to predict noise
-        noise_pred_batch = self.nn_model(y_t, x_batch, _ts / self.n_T, context_mask)
+        if self.nn_model.net_type == 'unet':
+            noise_pred_batch = self.nn_model(y_t, x_batch, _ts, context_mask)
+        else:
+            noise_pred_batch = self.nn_model(y_t, x_batch, _ts / self.n_T, context_mask)
 
         # return mse between predicted and true noise
         if predict_noise:
@@ -379,7 +519,10 @@ class Model_Cond_Diffusion(nn.Module):
             if extract_embedding:
                 eps = self.nn_model(y_i, x_batch, t_is, context_mask, x_embed)
             else:
-                eps = self.nn_model(y_i, x_batch, t_is, context_mask)
+                if self.nn_model.net_type == 'unet':
+                    eps = self.nn_model(y_i, x_batch, t_is*self.n_T, context_mask)
+                else:
+                    eps = self.nn_model(y_i, x_batch, t_is, context_mask)
             if not is_zero:
                 eps1 = eps[:n_sample]
                 eps2 = eps[n_sample:]
@@ -443,7 +586,10 @@ class Model_Cond_Diffusion(nn.Module):
             z = torch.randn(y_shape).to(self.device) if i > 1 else 0
 
             # split predictions and compute weighting
-            eps = self.nn_model(y_i, x_batch, t_is, context_mask)
+            if self.nn_model.net_type == 'unet':
+                eps = self.nn_model(y_i, x_batch, t_is*self.n_T, context_mask)
+            else:
+                eps = self.nn_model(y_i, x_batch, t_is, context_mask)
             if not is_zero:
                 eps1 = eps[:n_sample]
                 eps2 = eps[n_sample:]

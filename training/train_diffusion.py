@@ -60,8 +60,9 @@ class PriorDataset(Dataset):
         if self.sample_z:
             latent_std = self.latent_all_std[index]
             latent = np.random.normal(latent,latent_std)
-            latent = (latent - self.latent_mean) / self.latent_std
-
+            #latent = (latent - self.latent_mean) / self.latent_std
+        #else:
+        #    latent = (latent - self.latent_mean) / self.latent_std
         return (state, latent)
 
 
