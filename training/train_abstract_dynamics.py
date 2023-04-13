@@ -72,7 +72,6 @@ def train(args):
     experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
     experiment.log_parameters({'lrate':args.lrate,
                             'batch_size':args.batch_size,
-                            'net_type':args.net_type,
                             'sample_z':args.sample_z,
                             'state_decoder_type':args.state_decoder_type,
                             'skill_model_filename':args.skill_model_filename,
