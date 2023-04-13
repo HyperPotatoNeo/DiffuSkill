@@ -469,7 +469,7 @@ class Model_Cond_Diffusion(nn.Module):
         if predict_noise:
             return self.loss_mse(noise, noise_pred_batch)
         else:
-            return self.loss_mse(y_batch, noise_pred_batch)
+            return (torch.minimum((self.sqrtab[_ts] / self.sqrtmab[_ts]) ** 2, torch.tensor(5)) * ((y_batch - noise_pred_batch) ** 2)).mean()
 
     def sample(self, x_batch, return_y_trace=False, extract_embedding=False, predict_noise=True):
         # also use this as a shortcut to avoid doubling batch when guide_w is zero
