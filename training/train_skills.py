@@ -63,7 +63,7 @@ def test(model, test_state_decoder):
 parser = argparse.ArgumentParser()
 parser.add_argument('--beta', type=float, default=1e-5)
 parser.add_argument('--conditional_prior', type=int, default=1)
-parser.add_argument('--z_dim', type=float, default=64)
+parser.add_argument('--z_dim', type=int, default=64)
 parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
 args = parser.parse_args()
