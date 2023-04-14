@@ -66,6 +66,7 @@ parser.add_argument('--conditional_prior', type=int, default=1)
 parser.add_argument('--z_dim', type=int, default=64)
 parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
+parser.add_argument('--state_decoder_type', type=str, default='autoregressive')
 args = parser.parse_args()
 
 batch_size = 128
@@ -80,8 +81,8 @@ n_epochs = 50000
 test_split = .2
 a_dist = 'normal' # 'tanh_normal' or 'normal'
 encoder_type = 'gru' # 'transformer' #'state_sequence'
-state_decoder_type = 'autoregressive'
-policy_decoder_type = 'autoregressive'
+state_decoder_type = args.state_decoder_type
+policy_decoder_type = args.policy_decoder_type
 load_from_checkpoint = False
 per_element_sigma = True
 start_training_state_decoder_after = 0
