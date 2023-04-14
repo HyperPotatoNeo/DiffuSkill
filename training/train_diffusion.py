@@ -46,9 +46,11 @@ class PriorDataset(Dataset):
         if train_or_test == "train":
             self.state_all = self.state_all[:n_train]
             self.latent_all = self.latent_all[:n_train]
+            self.latent_all_std = self.latent_all_std[:n_train]
         elif train_or_test == "test":
             self.state_all = self.state_all[n_train:]
             self.latent_all = self.latent_all[n_train:]
+            self.latent_all_std = self.latent_all_std[n_train:]
         else:
             raise NotImplementedError
 
