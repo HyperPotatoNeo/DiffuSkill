@@ -274,21 +274,21 @@ def evaluate(args):
     envs = [gym.make(args.env) for _ in range(args.num_parallel_envs)]
 
     if not args.append_goals:
-      state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
-      state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
-      state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
+      #state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
+      state_mean = 0#torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
+      state_std = 1#torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
 
-      latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_latents.npy"), allow_pickle=True)
-      latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
-      latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
+      #latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_latents.npy"), allow_pickle=True)
+      latent_mean = 0#torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
+      latent_std = 1#torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
     else:
-      state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_goals_states.npy"), allow_pickle=True)
-      state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
-      state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
+      #state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_goals_states.npy"), allow_pickle=True)
+      state_mean = 0#torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
+      state_std = 1#torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
 
-      latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_goals_latents.npy"), allow_pickle=True)
-      latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
-      latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
+      #latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_goals_latents.npy"), allow_pickle=True)
+      latent_mean = 0#torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
+      latent_std = 1#torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
 
     if args.policy == 'greedy':
         policy_fn = greedy_policy
