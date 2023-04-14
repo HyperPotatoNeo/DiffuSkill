@@ -108,7 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoder_type', type=str, default='gru')
     parser.add_argument('--state_decoder_type', type=str, default='autoregressive')
     parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
-    parser.add_argument('--per_element_sigma', type=int, default=0)
+    parser.add_argument('--per_element_sigma', type=int, default=1)
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
     parser.add_argument('--z_dim', type=int, default=64)

@@ -58,14 +58,15 @@ def chunks(obs,actions,H,stride):
 	return torch.stack(obs_chunks),torch.stack(action_chunks)
 
 
-def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
+def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, get_rewards=False):
     env = gym.make(env_name)
     dataset = env.get_dataset()
 
     if env_name == 'antmaze-large-diverse-v2':
         observations = []
         actions = []
-        # rewards = []
+        if get_rewards:
+            rewards = []
         # goals = []
 
         num_trajectories = np.where(dataset['timeouts'])[0].shape[0]
@@ -81,6 +82,8 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
 
             obs = dataset['observations'][start_idx : end_idx]
             act = dataset['actions'][start_idx : end_idx]
+            if get_rewards:
+                rew = dataset['rewards'][start_idx : end_idx]
                 
             # reward = dataset['rewards'][start_idx : end_idx]
             # goal = dataset['infos/goal'][start_idx : end_idx]
@@ -93,12 +96,14 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
 
                 observations.append(torch.tensor(obs[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 actions.append(torch.tensor(act[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
-                # rewards.append(torch.tensor(reward[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+                if get_rewards:
+                    rewards.append(torch.tensor(reward[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 # goals.append(torch.tensor(goal[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
 
         observations = torch.stack(observations)
         actions = torch.stack(actions)
-        # rewards = torch.stack(rewards)
+        if get_rewards:
+            rewards = torch.stack(rewards)
         # goals = torch.stack(goals)
 
         num_samples = observations.shape[0]
@@ -114,21 +119,27 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False):
 
         observations_train = observations[train_indices]
         actions_train = actions[train_indices]
-        # rewards_train = rewards[train_indices]
+        if get_rewards:
+            rewards_train = rewards[train_indices]
+        else:
+            rewards_train = None
         # goals_train = goals[train_indices]
 
         observations_test = observations[test_indices]
         actions_test = actions[test_indices]
-        # rewards_test = rewards[test_indices]
+        if get_rewards:
+            rewards_test = rewards[test_indices]
+        else:
+            rewards_test = None
         # goals_test = goals[test_indices]
 
         return dict(observations_train=observations_train,
                     actions_train=actions_train,
-                    # rewards_train=rewards_train,
+                    rewards_train=rewards_train,
                     # goals_train=goals_train,
                     observations_test=observations_test,
                     actions_test=actions_test,
-                    # rewards_test=rewards_test,
+                    rewards_test=rewards_test,
                     # goals_test=goals_test,
                     )
 
