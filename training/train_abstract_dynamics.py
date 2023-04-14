@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import os
+from comet_ml import Experiment
 
 import d4rl
 import gym
@@ -57,7 +58,7 @@ class StateDecoderDataset(Dataset):
         if self.sample_z:
             latent_std = self.latent_all_std[index]
             latent = np.random.normal(latent,latent_std)
-            latent = (latent - self.latent_mean) / self.latent_std
+            #latent = (latent - self.latent_mean) / self.latent_std
         sT = self.sT_all[index]
 
         return (state, latent, sT)
@@ -68,6 +69,14 @@ def train(args):
     dataset = env.get_dataset()
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
+
+    experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
+    experiment.log_parameters({'lrate':args.lrate,
+                            'batch_size':args.batch_size,
+                            'sample_z':args.sample_z,
+                            'state_decoder_type':args.state_decoder_type,
+                            'skill_model_filename':args.skill_model_filename,
+                            'z_dim':args.z_dim})
 
     # get datasets set up
     torch_data_train = StateDecoderDataset(
@@ -135,6 +144,7 @@ def train(args):
             pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
             optim.step()
 
+        experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
         results_ep.append(loss_ep / n_batch)
         
         # test loop
@@ -156,6 +166,8 @@ def train(args):
             n_batch += 1
             pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
 
+        experiment.log_metric("test_loss", loss_ep/n_batch, step=ep)
+
         if loss_ep < best_test_loss:
             best_test_loss = loss_ep
             torch.save({'model_state_dict': skill_model.state_dict()}, os.path.join(args.checkpoint_dir, args.skill_model_filename))
@@ -174,7 +186,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--sample_z', type=int, default=0)
 
-    parser.add_argument('--horizon', type=int, default=40)
+    parser.add_argument('--horizon', type=int, default=30)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--a_dist', type=str, default='normal')

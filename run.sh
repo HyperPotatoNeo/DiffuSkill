@@ -27,4 +27,8 @@ source activate cvideos
 # python training/train_skills.py --beta 1 --conditional_prior 0 --z_dim 8 --policy_decoder_type mlp
 # python training/train_skills.py --beta 1 --conditional_prior 1 --z_dim 8 --policy_decoder_type mlp
 # python training/train_skills.py --beta 1 --conditional_prior 0 --z_dim 16 --policy_decoder_type mlp
-python training/train_skills.py --beta 1 --conditional_prior 1 --z_dim 16 --policy_decoder_type mlp
+#python training/train_skills.py --beta 1 --conditional_prior 1 --z_dim 16 --policy_decoder_type mlp
+
+python3 training/train_diffusion.py --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_autoregressive_policy_dec_autoregressive_H_30_b_1.0_conditionalp_0_diffusion_prior_False_zdim_16_best_a.pth' --append_goals 0 --diffusion_steps 200 --sample_z 1 --n_epoch 1000 --net_type unet
+python3 training/train_abstract_dynamics.py --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_autoregressive_policy_dec_autoregressive_H_30_b_1.0_conditionalp_0_diffusion_prior_False_zdim_16_best_a.pth' --sample_z 1 --n_epoch 1000 --z_dim 16
+python training/train_skills.py --beta 1 --conditional_prior 0 --z_dim 64

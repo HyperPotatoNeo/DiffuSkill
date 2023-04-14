@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import os
+from comet_ml import Experiment
 
 import d4rl
 import gym
@@ -61,7 +62,8 @@ class PriorDataset(Dataset):
             latent_std = self.latent_all_std[index]
             latent = np.random.normal(latent,latent_std)
             # latent = (latent - self.latent_mean) / self.latent_std
-
+        #else:
+        #    latent = (latent - self.latent_mean) / self.latent_std
         return (state, latent)
 
 
@@ -70,6 +72,14 @@ def train(args):
     dataset = env.get_dataset()
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
+
+    experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
+    experiment.log_parameters({'lrate':args.lrate,
+                            'batch_size':args.batch_size,
+                            'net_type':args.net_type,
+                            'sample_z':args.sample_z,
+                            'diffusion_steps':args.diffusion_steps,
+                            'skill_model_filename':args.skill_model_filename})
 
     # get datasets set up
     torch_data_train = PriorDataset(
@@ -129,6 +139,7 @@ def train(args):
             n_batch += 1
             pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
             optim.step()
+        experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
 
         if args.append_goals:
             torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc.pt'))
@@ -150,6 +161,7 @@ def train(args):
                 loss_ep += loss.detach().item()
                 n_batch += 1
                 pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
+        experiment.log_metric("test_loss", loss_ep/n_batch, step=ep)
 
         if loss_ep < best_test_loss:
             best_test_loss = loss_ep
