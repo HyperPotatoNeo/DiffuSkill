@@ -83,7 +83,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
             obs = dataset['observations'][start_idx : end_idx]
             act = dataset['actions'][start_idx : end_idx]
             if get_rewards:
-                rew = dataset['rewards'][start_idx : end_idx]
+                rew = np.expand_dims(dataset['rewards'][start_idx : end_idx],axis=1)
                 
             # reward = dataset['rewards'][start_idx : end_idx]
             # goal = dataset['infos/goal'][start_idx : end_idx]
@@ -97,7 +97,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
                 observations.append(torch.tensor(obs[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 actions.append(torch.tensor(act[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 if get_rewards:
-                    rewards.append(torch.tensor(reward[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+                    rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 # goals.append(torch.tensor(goal[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
 
         observations = torch.stack(observations)

@@ -61,7 +61,7 @@ def collect_data(args):
         data = data.to(args.device)
         states = data[:, :, :skill_model.state_dim]
         actions = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim]
-        rewards = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim:]
+        rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:]
 
         start_idx = batch_id * args.batch_size
         end_idx = start_idx + args.batch_size
