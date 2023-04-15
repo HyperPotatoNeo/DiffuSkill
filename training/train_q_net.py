@@ -118,8 +118,7 @@ if __name__ == "__main__":
     parser.add_argument('--skill_model_filename', type=str)
 
     parser.add_argument('--drop_prob', type=float, default=0.0)
-    parser.add_argument('--diffusion_steps', type=int, default=200)
-    parser.add_argument('--cfg_weight', type=float, default=0.0)
+    parser.add_argument('--diffusion_steps', type=int, default=100)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--predict_noise', type=int, default=0)
 
