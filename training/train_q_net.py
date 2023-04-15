@@ -92,7 +92,7 @@ def train(args):
         x_dim=x_shape,
         y_dim=y_dim,
         drop_prob=args.drop_prob,
-        guide_w=0.0,
+        guide_w=args.cfg_weight,
     ).to(args.device)
     model.eval()
 
@@ -119,6 +119,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--drop_prob', type=float, default=0.0)
     parser.add_argument('--diffusion_steps', type=int, default=200)
+    parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--predict_noise', type=int, default=0)
 
