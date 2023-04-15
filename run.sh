@@ -47,3 +47,6 @@ python training/train_q_net.py --sample_z 1 --skill_model_filename 'skill_model_
 python training/train_q_net.py --sample_z 1 --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_mlp_policy_dec_autoregressive_H_30_b_0.1_conditionalp_1_diffusion_prior_False_zdim_16_best_a.pth' --cfg_weight 4
 python training/train_q_net.py --sample_z 1 --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_mlp_policy_dec_autoregressive_H_30_b_1.0_conditionalp_1_diffusion_prior_False_zdim_16_best_a.pth' --cfg_weight 0
 python training/train_q_net.py --sample_z 1 --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_mlp_policy_dec_autoregressive_H_30_b_1.0_conditionalp_1_diffusion_prior_False_zdim_16_best_a.pth' --cfg_weight 4
+
+python3 training/collect_q_learning_dataset.py --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_mlp_policy_dec_autoregressive_H_30_b_0.1_conditionalp_1_diffusion_prior_False_zdim_16_best_a.pth' --beta 0.1
+python3 training/collect_q_learning_dataset.py --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_mlp_policy_dec_autoregressive_H_30_b_1.0_conditionalp_1_diffusion_prior_False_zdim_16_best_a.pth' --beta 1.0
