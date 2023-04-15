@@ -137,7 +137,7 @@ class DDQN(nn.Module):
                     self.target_net_1 = copy.deepcopy(self.q_net_1)
                     self.target_net_0.eval()
                     self.target_net_1.eval()
-                    if steps_total%(update_frequency*10) == 0:
+                    if steps_total%(update_frequency*15) == 0:
                         torch.save(self,  'q_checkpoints/'+diffusion_model_name+'_dqn_agent_'+str(steps_total)+'_cfg_weight_'+str(cfg_weight)+'.pt')
 
             self.scheduler_0.step()
