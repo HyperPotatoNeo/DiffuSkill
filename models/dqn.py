@@ -58,10 +58,10 @@ class DDQN(nn.Module):
         return max_z, max_q_vals
 
 
-    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=250, diffusion_model_name=''):
+    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=250, diffusion_model_name='', cfg_weight=0.0):
         assert self.diffusion_prior is not None
         experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
-        experiment.log_parameters({'diffusion_prior':diffusion_model_name})
+        experiment.log_parameters({'diffusion_prior':diffusion_model_name, 'cfg_weight':cfg_weight})
         steps_net_0, steps_net_1, steps_total = 0, 0, 0
         self.target_net_0 = copy.deepcopy(self.q_net_0)
         self.target_net_1 = copy.deepcopy(self.q_net_1)
@@ -137,7 +137,7 @@ class DDQN(nn.Module):
                     self.target_net_0.eval()
                     self.target_net_1.eval()
                     if steps_total%(update_frequency*4) == 0:
-                        torch.save(self,  'q_checkpoints/'+diffusion_model_name+'_dqn_agent_'+str(steps_total)+'.pt')
+                        torch.save(self,  'q_checkpoints/'+diffusion_model_name+'_dqn_agent_'+str(steps_total)+'_cfg_weight_'+str(cfg_weight)+'.pt')
                     break
 
             experiment.log_metric("train_loss_episode", loss_ep/n_batch, step=epoch)
