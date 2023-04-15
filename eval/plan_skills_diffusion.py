@@ -19,6 +19,8 @@ from models.diffusion_models import (
 )
 from models.skill_model import SkillModel
 
+import multiprocessing as mp
+
 ANTMAZE = plt.imread('img/maze-large.png')
 
 def visualize_states(state_0, states, best_state):
@@ -86,7 +88,9 @@ def greedy_policy(
         best_latent[env_idx] = latent_0[start_idx + min_idx]
 
     if visualize:
-        visualize_states(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy())
+        p = mp.Process(target=visualize_states, args=(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy()))
+        p.start()
+        p.join()
 
     return best_latent
 
@@ -146,7 +150,9 @@ def exhaustive_policy(
         best_latent[env_idx] = latent_0[(env_idx * num_diffusion_samples ** planning_depth) + min_idx // (num_diffusion_samples ** (planning_depth - 1))]
 
     if visualize:
-        visualize_states(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy())
+        p = mp.Process(target=visualize_states, args=(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy()))
+        p.start()
+        p.join()
 
     return best_latent
 
