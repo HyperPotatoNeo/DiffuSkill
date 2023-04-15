@@ -31,7 +31,8 @@ class DDQN(nn.Module):
         
         self.optimizer_0 = optim.Adam(params=self.q_net_0.parameters(), lr=lr)
         self.optimizer_1 = optim.Adam(params=self.q_net_1.parameters(), lr=lr)
-
+        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=2, gamma=0.3)
+        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=2, gamma=0.3)
 
     @torch.no_grad()
     def get_max_skills(self, states, net=0):
@@ -131,14 +132,15 @@ class DDQN(nn.Module):
                     experiment.log_metric("train_loss_1", loss_net_1, step=steps_total)
                     experiment.log_metric("train_loss", loss_total, step=steps_total)
                     loss_net_0, loss_net_1, loss_total = 0,0,0
-                    steps_net_0, steps_net_1 == 0,0
+                    steps_net_0, steps_net_1 = 0,0
                     self.target_net_0 = copy.deepcopy(self.q_net_0)
                     self.target_net_1 = copy.deepcopy(self.q_net_1)
                     self.target_net_0.eval()
                     self.target_net_1.eval()
-                    if steps_total%(update_frequency*4) == 0:
+                    if steps_total%(update_frequency*10) == 0:
                         torch.save(self,  'q_checkpoints/'+diffusion_model_name+'_dqn_agent_'+str(steps_total)+'_cfg_weight_'+str(cfg_weight)+'.pt')
-                    break
 
+            self.scheduler_0.step()
+            self.scheduler_1.step()
             experiment.log_metric("train_loss_episode", loss_ep/n_batch, step=epoch)
             epoch += 1
