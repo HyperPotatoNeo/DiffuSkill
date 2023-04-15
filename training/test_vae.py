@@ -44,7 +44,7 @@ def test_vae(args):
         action = action.to(args.device).unsqueeze(0)
 
         with torch.no_grad():
-            reconstructed_observation, _, _, _, _, _ = skill_model(observation, action, True)
+            reconstructed_observation, _, _, _, _, _, _ = skill_model(observation, action, True)
 
             if args.conditional_prior:
                 latent_prior, _ = skill_model.prior(observation[:, 0:1])
