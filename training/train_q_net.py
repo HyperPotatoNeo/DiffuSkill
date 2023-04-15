@@ -97,7 +97,7 @@ def train(args):
     model.eval()
 
     dqn_agent = DDQN(state_dim = x_shape, z_dim=y_dim, diffusion_prior=model)
-    dqn_agent.learn(dataload_train=dataload_train, diffusion_model_name=args.skill_model_filename[:-4])
+    dqn_agent.learn(dataload_train=dataload_train, diffusion_model_name=args.skill_model_filename[:-4], cfg_weight=args.cfg_weight)
 
 
 if __name__ == "__main__":
