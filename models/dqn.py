@@ -89,7 +89,8 @@ class DDQN(nn.Module):
 
                     q_s0z = self.q_net_0(s0,z)
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = self.target_net_0(sT,max_sT_skills.detach())
+                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                          self.target_net_1(sT,max_sT_skills.detach()),)
                     q_target = reward + self.gamma*q_sTz
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
@@ -105,7 +106,8 @@ class DDQN(nn.Module):
 
                     q_s0z = self.q_net_1(s0,z)
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = self.target_net_1(sT,max_sT_skills.detach())
+                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                          self.target_net_1(sT,max_sT_skills.detach()),)
                     q_target = reward + self.gamma*q_sTz
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
