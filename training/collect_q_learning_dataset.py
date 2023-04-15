@@ -101,17 +101,17 @@ if __name__ == '__main__':
     parser.add_argument('--append_goals', type=int, default=0)
     parser.add_argument('--save_z_dist', type=int, default=1)
 
-    parser.add_argument('--horizon', type=int, default=40)
+    parser.add_argument('--horizon', type=int, default=30)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--a_dist', type=str, default='normal')
     parser.add_argument('--encoder_type', type=str, default='gru')
-    parser.add_argument('--state_decoder_type', type=str, default='autoregressive')
+    parser.add_argument('--state_decoder_type', type=str, default='mlp')
     parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
     parser.add_argument('--per_element_sigma', type=int, default=1)
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
-    parser.add_argument('--z_dim', type=int, default=64)
+    parser.add_argument('--z_dim', type=int, default=16)
 
     args = parser.parse_args()
 
