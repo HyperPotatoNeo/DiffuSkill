@@ -124,7 +124,8 @@ def exhaustive_policy(
         state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent_0.unsqueeze(1), evaluation=True)
         state[:,:state_dim] = state_pred.squeeze(1)
     else:
-        state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent_0)
+        state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), latent_0.unsqueeze(1))
+        state[:,:state_dim] = state_pred.squeeze(1)
 
     for depth in range(1, planning_depth):
         state = state.repeat_interleave(num_diffusion_samples, 0)
@@ -133,7 +134,8 @@ def exhaustive_policy(
             state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
             state[:,:state_dim] = state_pred.squeeze(1)
         else:
-            state[:,:state_dim], _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent_0)
+            state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), latent.unsqueeze(1))
+            state[:,:state_dim] = state_pred.squeeze(1)
 
     best_state = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
     best_latent = torch.zeros((num_parallel_envs, latent_0.shape[1])).to(args.device)
