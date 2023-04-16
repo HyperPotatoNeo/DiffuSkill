@@ -35,20 +35,23 @@ class DDQN(nn.Module):
         self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=3, gamma=0.3)
 
     @torch.no_grad()
-    def get_max_skills(self, states, net=0):
+    def get_max_skills(self, states, net=0, is_eval=False):
         '''
         INPUTS:
             states: batch_size x state_dim
         OUTPUTS:
             max_z: batch_size x z_dim
         '''
-        n_states = states.shape[0]
-        states = states.repeat_interleave(self.num_prior_samples, 0)
+        if not is_eval:
+            n_states = states.shape[0]
+            states = states.repeat_interleave(self.num_prior_samples, 0)
         z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
         if net==0:
             q_vals = self.target_net_0(states,z_samples)[:,0]#self.q_net_0(states,z_samples)[:,0]
         else:
             q_vals = self.target_net_1(states,z_samples)[:,0]#self.q_net_1(states,z_samples)[:,0]
+        if is_eval:
+            return z_samples, q_vals
         q_vals = q_vals.reshape(n_states, self.num_prior_samples)
         max_vals = torch.max(q_vals, dim=1)
         max_q_vals = max_vals.values

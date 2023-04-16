@@ -52,14 +52,28 @@ def q_policy(diffusion_model,
     ):
 
     state_dim = state_0.shape[1]
-    best_latent,_ = dqn_agent.get_max_skills(state_0)
+    state = state_0.repeat_interleave(num_diffusion_samples, 0)
+    latent,q_vals = dqn_agent.get_max_skills(state, is_eval=True)
     if args.state_decoder_type == 'autoregressive':
-        state_pred, _ = skill_model.decoder.abstract_dynamics(state_0[:,:state_dim].unsqueeze(1), None, best_latent.unsqueeze(1), evaluation=True)
+        state_pred, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim].unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
         state = state_pred.squeeze(1)
     else:
-        state, _ = skill_model.decoder.abstract_dynamics(state_0[:,:state_dim], best_latent)
+        state, _ = skill_model.decoder.abstract_dynamics(state[:,:state_dim], latent)
+
+    best_state = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
+    best_latent = torch.zeros((num_parallel_envs, latent.shape[1])).to(args.device)
+
+    for env_idx in range(num_parallel_envs):
+        start_idx = env_idx * num_diffusion_samples
+        end_idx = start_idx + num_diffusion_samples
+
+        max_idx = torch.argmax(q_vals[start_idx:end_idx,0])
+
+        best_state[env_idx] = state[start_idx + max_idx, :state_dim]
+        best_latent[env_idx] = latent[start_idx + max_idx]
+
     if visualize:
-        p = mp.Process(target=visualize_states, args=(state_0.cpu().numpy(), state.cpu().numpy(), state.cpu().numpy()))
+        p = mp.Process(target=visualize_states, args=(state_0.cpu().numpy(), state.cpu().numpy(), best_state.cpu().numpy()))
         p.start()
         p.join()
 
