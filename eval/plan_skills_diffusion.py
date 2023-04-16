@@ -33,6 +33,39 @@ def visualize_states(state_0, states, best_state):
     plt.show()
 
 
+def q_policy(diffusion_model,
+        skill_model,
+        state_0,
+        goal_state,
+        state_mean,
+        state_std,
+        latent_mean,
+        latent_std,
+        num_parallel_envs,
+        num_diffusion_samples,
+        extra_steps,
+        planning_depth,
+        predict_noise,
+        visualize,
+        append_goals,
+        dqn_agent
+    ):
+
+    state_dim = state_0.shape[1]
+    best_latent,_ = dqn_agent.get_max_skills(state_0)
+    if args.state_decoder_type == 'autoregressive':
+        state_pred, _ = skill_model.decoder.abstract_dynamics(state_0[:,:state_dim].unsqueeze(1), None, best_latent.unsqueeze(1), evaluation=True)
+        state = state_pred.squeeze(1)
+    else:
+        state, _ = skill_model.decoder.abstract_dynamics(state_0[:,:state_dim], best_latent)
+    if visualize:
+        p = mp.Process(target=visualize_states, args=(state_0.cpu().numpy(), state.cpu().numpy(), state.cpu().numpy()))
+        p.start()
+        p.join()
+
+    return best_latent
+
+
 def greedy_policy(
         diffusion_model,
         skill_model,
@@ -48,7 +81,8 @@ def greedy_policy(
         planning_depth,
         predict_noise,
         visualize,
-        append_goals
+        append_goals,
+        dqn_agent=None
     ):
     
     state_dim = state_0.shape[1]
@@ -110,7 +144,8 @@ def exhaustive_policy(
         planning_depth,
         predict_noise,
         visualize,
-        append_goals
+        append_goals,
+        dqn_agent=None
     ):
 
     state_dim = state_0.shape[1]
@@ -177,7 +212,8 @@ def eval_func(diffusion_model,
               predict_noise,
               visualize,
               render,
-              append_goals):
+              append_goals,
+              dqn_agent=None):
 
     with torch.no_grad():
         assert num_evals % num_parallel_envs == 0
@@ -214,7 +250,8 @@ def eval_func(diffusion_model,
                                 planning_depth,
                                 predict_noise,
                                 visualize,
-                                append_goals
+                                append_goals,
+                                dqn_agent
                             )
 
                 for _ in range(exec_horizon):
@@ -302,6 +339,13 @@ def evaluate(args):
         policy_fn = greedy_policy
     elif args.policy == 'exhaustive':
         policy_fn = exhaustive_policy
+    elif args.policy == 'q':
+      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(cfg_weight)+'.pt')).to(args.device)
+      dqn_agent.extra_steps = args.extra_steps
+      dqn_agent.target_net_0 = dqn_agent.q_net_0
+      dqn_agent.eval()
+      dqn_agent.num_prior_samples = args.num_diffusion_samples
+      policy_fn = q_policy
     else:
         raise NotImplementedError
 
@@ -323,7 +367,8 @@ def evaluate(args):
               args.predict_noise,
               args.visualize,
               args.render,
-              args.append_goals
+              args.append_goals,
+              dqn_agent
               )
 
 
@@ -336,12 +381,14 @@ if __name__ == "__main__":
     parser.add_argument('--num_evals', type=int, default=1)
     parser.add_argument('--num_parallel_envs', type=int, default=1)
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
+    parser.add_argument('--q_checkpoint_dir', type=str, default='q_checkpoints')
+    parser.add_argument('--q_checkpoint_steps', type=int, default=0)
     parser.add_argument('--dataset_dir', type=str, default='data')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--diffusion_model_filename', type=str)
     parser.add_argument('--append_goals', type=int, default=0)
 
-    parser.add_argument('--policy', type=str, default='greedy')
+    parser.add_argument('--policy', type=str, default='greedy') #greedy/exhaustive/q
     parser.add_argument('--num_diffusion_samples', type=int, default=50)
     parser.add_argument('--diffusion_steps', type=int, default=50)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
