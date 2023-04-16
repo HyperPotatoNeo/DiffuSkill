@@ -106,7 +106,7 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, default='antmaze-large-diverse-v2')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--n_epoch', type=int, default=10000)
-    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--lr', type=float, default=5e-4)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--net_type', type=str, default='unet')
     parser.add_argument('--n_hidden', type=int, default=512)
