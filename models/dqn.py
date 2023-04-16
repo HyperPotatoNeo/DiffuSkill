@@ -11,7 +11,7 @@ import copy
 from tqdm import tqdm
 
 class DDQN(nn.Module):
-    def __init__(self, state_dim, z_dim, h_dim=256, gamma=0.999, lr=1e-3, num_prior_samples=100, extra_steps=10, device='cuda', diffusion_prior=None):
+    def __init__(self, state_dim, z_dim, h_dim=256, gamma=0.995, tau=0.995, lr=1e-3, num_prior_samples=100, extra_steps=10, device='cuda', diffusion_prior=None):
         super(DDQN,self).__init__()
 
         self.state_dim = state_dim
@@ -21,7 +21,7 @@ class DDQN(nn.Module):
         self.num_prior_samples = num_prior_samples
         self.extra_steps = extra_steps
         self.device = device
-        self.tau = 1e-3
+        self.tau = tau
         self.diffusion_prior = diffusion_prior
 
         self.q_net_0 = MLP_Q(state_dim=state_dim,z_dim=z_dim,h_dim=h_dim).to(self.device)
@@ -46,9 +46,9 @@ class DDQN(nn.Module):
         states = states.repeat_interleave(self.num_prior_samples, 0)
         z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
         if net==0:
-            q_vals = self.q_net_0(states,z_samples)[:,0]
+            q_vals = self.target_net_0(states,z_samples)[:,0]#self.q_net_0(states,z_samples)[:,0]
         else:
-            q_vals = self.q_net_1(states,z_samples)[:,0]
+            q_vals = self.target_net_1(states,z_samples)[:,0]#self.q_net_1(states,z_samples)[:,0]
         q_vals = q_vals.reshape(n_states, self.num_prior_samples)
         max_vals = torch.max(q_vals, dim=1)
         max_q_vals = max_vals.values
@@ -59,7 +59,7 @@ class DDQN(nn.Module):
         return max_z, max_q_vals
 
 
-    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=250, diffusion_model_name='', cfg_weight=0.0):
+    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=50, diffusion_model_name='', cfg_weight=0.0):
         assert self.diffusion_prior is not None
         experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
         experiment.log_parameters({'diffusion_prior':diffusion_model_name, 'cfg_weight':cfg_weight})
@@ -133,12 +133,16 @@ class DDQN(nn.Module):
                     experiment.log_metric("train_loss", loss_total, step=steps_total)
                     loss_net_0, loss_net_1, loss_total = 0,0,0
                     steps_net_0, steps_net_1 = 0,0
-                    self.target_net_0 = copy.deepcopy(self.q_net_0)
-                    self.target_net_1 = copy.deepcopy(self.q_net_1)
+                    #self.target_net_0 = copy.deepcopy(self.q_net_0)
+                    #self.target_net_1 = copy.deepcopy(self.q_net_1)
+                    for target_param, local_param in zip(self.target_net_0.parameters(), self.q_net_0.parameters()):
+                        target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
+                    for target_param, local_param in zip(self.target_net_1.parameters(), self.q_net_1.parameters()):
+                        target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                     self.target_net_0.eval()
                     self.target_net_1.eval()
-                    if steps_total%(update_frequency*15) == 0:
-                        torch.save(self,  'q_checkpoints/'+diffusion_model_name+'_dqn_agent_'+str(steps_total)+'_cfg_weight_'+str(cfg_weight)+'.pt')
+                    if steps_total%(5000) == 0:
+                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'.pt')
 
             self.scheduler_0.step()
             self.scheduler_1.step()

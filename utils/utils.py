@@ -97,6 +97,9 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
                 observations.append(torch.tensor(obs[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 actions.append(torch.tensor(act[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 if get_rewards:
+                    if np.sum(rew[chunk_start_idx : chunk_end_idx]>0):
+                        rewards.append(torch.ones((chunk_end_idx-chunk_start_idx,1), dtype=torch.float32))
+                        break
                     rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 # goals.append(torch.tensor(goal[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
 
