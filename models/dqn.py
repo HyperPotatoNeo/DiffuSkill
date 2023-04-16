@@ -31,8 +31,8 @@ class DDQN(nn.Module):
         
         self.optimizer_0 = optim.Adam(params=self.q_net_0.parameters(), lr=lr)
         self.optimizer_1 = optim.Adam(params=self.q_net_1.parameters(), lr=lr)
-        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=2, gamma=0.3)
-        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=2, gamma=0.3)
+        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=3, gamma=0.3)
+        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=3, gamma=0.3)
 
     @torch.no_grad()
     def get_max_skills(self, states, net=0):
@@ -83,42 +83,44 @@ class DDQN(nn.Module):
                 z = z.type(torch.FloatTensor).to(self.device)
                 sT = sT.type(torch.FloatTensor).to(self.device)
                 reward = reward.type(torch.FloatTensor).to(self.device)
-                net_id = np.random.binomial(n=1, p=0.5, size=(1,))
+                #net_id = np.random.binomial(n=1, p=0.5, size=(1,))
+                net_id = 0
+                #if net_id==0:
+                self.optimizer_0.zero_grad()
 
-                if net_id==0:
-                    self.optimizer_0.zero_grad()
+                q_s0z = self.q_net_0(s0,z)
+                max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                      self.target_net_1(sT,max_sT_skills.detach()),)
+                q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                
+                bellman_loss = F.mse_loss(q_s0z, q_target)
+                bellman_loss.backward()
+                clip_grad_norm_(self.q_net_0.parameters(), 1)
+                self.optimizer_0.step()
+                loss_net_0 += bellman_loss.detach().item()
+                loss_total += bellman_loss.detach().item()
+                loss_ep += bellman_loss.detach().item()
+                steps_net_0 += 1
+                
+                net_id = 1
+                #else:
+                self.optimizer_1.zero_grad()
 
-                    q_s0z = self.q_net_0(s0,z)
-                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                          self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*q_sTz
-                    
-                    bellman_loss = F.mse_loss(q_s0z, q_target)
-                    bellman_loss.backward()
-                    clip_grad_norm_(self.q_net_0.parameters(), 1)
-                    self.optimizer_0.step()
-                    loss_net_0 += bellman_loss.detach().item()
-                    loss_total += bellman_loss.detach().item()
-                    loss_ep += bellman_loss.detach().item()
-                    steps_net_0 += 1
-                else:
-                    self.optimizer_1.zero_grad()
-
-                    q_s0z = self.q_net_1(s0,z)
-                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                          self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*q_sTz
-                    
-                    bellman_loss = F.mse_loss(q_s0z, q_target)
-                    bellman_loss.backward()
-                    clip_grad_norm_(self.q_net_1.parameters(), 1)
-                    self.optimizer_1.step()
-                    loss_net_1 += bellman_loss.detach().item()
-                    loss_total += bellman_loss.detach().item()
-                    loss_ep += bellman_loss.detach().item()
-                    steps_net_1 += 1
+                q_s0z = self.q_net_1(s0,z)
+                max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                      self.target_net_1(sT,max_sT_skills.detach()),)
+                q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                
+                bellman_loss = F.mse_loss(q_s0z, q_target)
+                bellman_loss.backward()
+                clip_grad_norm_(self.q_net_1.parameters(), 1)
+                self.optimizer_1.step()
+                loss_net_1 += bellman_loss.detach().item()
+                loss_total += bellman_loss.detach().item()
+                loss_ep += bellman_loss.detach().item()
+                steps_net_1 += 1
 
                 n_batch += 1
                 steps_total += 1
@@ -127,7 +129,7 @@ class DDQN(nn.Module):
                 if steps_total%update_frequency == 0:
                     loss_net_0 /= (steps_net_0+1e-4)
                     loss_net_1 /= (steps_net_1+1e-4)
-                    loss_total /= update_frequency
+                    loss_total /= 2*update_frequency
                     experiment.log_metric("train_loss_0", loss_net_0, step=steps_total)
                     experiment.log_metric("train_loss_1", loss_net_1, step=steps_total)
                     experiment.log_metric("train_loss", loss_total, step=steps_total)
