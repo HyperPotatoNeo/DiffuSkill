@@ -352,6 +352,7 @@ def evaluate(args):
       latent_mean = 0#torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
       latent_std = 1#torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
 
+    dqn_agent = None
     if args.policy == 'greedy':
         policy_fn = greedy_policy
     elif args.policy == 'exhaustive':
