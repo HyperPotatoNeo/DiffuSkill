@@ -283,6 +283,9 @@ def eval_func(diffusion_model,
                     if env_step > 1000:
                         break
 
+                if sum(done) == num_parallel_envs:
+                    break
+
             total_runs = (eval_step + 1) * num_parallel_envs
             print(f'Total successful evaluations: {success_evals} out of {total_runs} i.e. {success_evals / total_runs * 100}%')
 
