@@ -67,7 +67,7 @@ def q_policy(diffusion_model,
         start_idx = env_idx * num_diffusion_samples
         end_idx = start_idx + num_diffusion_samples
 
-        max_idx = torch.argmax(q_vals[start_idx:end_idx,0])
+        max_idx = torch.argmax(q_vals[start_idx:end_idx])
 
         best_state[env_idx] = state[start_idx + max_idx, :state_dim]
         best_latent[env_idx] = latent[start_idx + max_idx]
@@ -354,7 +354,8 @@ def evaluate(args):
     elif args.policy == 'exhaustive':
         policy_fn = exhaustive_policy
     elif args.policy == 'q':
-      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(cfg_weight)+'.pt')).to(args.device)
+      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'.pt')).to(args.device)
+      dqn_agent.diffusion_prior = diffusion_model
       dqn_agent.extra_steps = args.extra_steps
       dqn_agent.target_net_0 = dqn_agent.q_net_0
       dqn_agent.eval()
@@ -404,7 +405,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--policy', type=str, default='greedy') #greedy/exhaustive/q
     parser.add_argument('--num_diffusion_samples', type=int, default=50)
-    parser.add_argument('--diffusion_steps', type=int, default=50)
+    parser.add_argument('--diffusion_steps', type=int, default=100)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--planning_depth', type=int, default=3)
     parser.add_argument('--extra_steps', type=int, default=4)
@@ -419,7 +420,7 @@ if __name__ == "__main__":
     parser.add_argument('--per_element_sigma', type=int, default=1)
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
-    parser.add_argument('--z_dim', type=int, default=256)
+    parser.add_argument('--z_dim', type=int, default=16)
     parser.add_argument('--horizon', type=int, default=30)
 
     parser.add_argument('--render', type=int, default=1)
