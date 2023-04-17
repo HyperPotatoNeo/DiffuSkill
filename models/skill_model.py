@@ -145,8 +145,12 @@ class LowLevelPolicy(nn.Module):
         super(LowLevelPolicy,self).__init__()
         
         self.layers = nn.Sequential(nn.Linear(state_dim+z_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,h_dim),nn.ReLU())
-        self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
-        self.sig_layer  = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
+        if a_dist=='softmax':
+            self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,21)) #ONLY FOR AUTOREGRESSIVE POLICY DECODER
+            self.act = nn.Softmax(dim=2)
+        else:
+            self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
+            self.sig_layer  = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
         self.a_dist = a_dist
         self.a_dim = a_dim
         self.fixed_sig = fixed_sig
@@ -169,6 +173,9 @@ class LowLevelPolicy(nn.Module):
         feats = self.layers(state_z)
         # get mean and stand dev of action distribution
         a_mean = self.mean_layer(feats)
+        if self.a_dist=='softmax':
+            a_mean = self.act(a_mean)
+            return a_mean, None
         a_sig  = nn.Softplus()(self.sig_layer(feats))
 
         if self.fixed_sig is not None:
@@ -191,6 +198,11 @@ class LowLevelPolicy(nn.Module):
         return action.reshape([self.a_dim,])
      
     def reparameterize(self, mean, std):
+        if self.a_dist=='softmax':
+            intervals = torch.linspace(-1, 1, 21).cuda()
+            max_idx = torch.argmax(mean, dim=2).unsqueeze(2)
+            max_interval = intervals[max_idx]
+            return max_interval
         eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
         return mean + std*eps
 
@@ -204,7 +216,7 @@ class AutoregressiveLowLevelPolicy(nn.Module):
     def __init__(self,state_dim,a_dim,z_dim,h_dim,a_dist,fixed_sig=None):
 
         super(AutoregressiveLowLevelPolicy,self).__init__()
-        self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist='normal',fixed_sig=fixed_sig) for i in range(a_dim)])
+        self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(a_dim)])
         self.a_dim = a_dim
         self.a_dist = a_dist
         
@@ -228,10 +240,15 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             state_a = torch.cat([state,actions[:,:,:i]],dim=-1)
             # pass through ith policy component
             a_mean_i,a_sig_i = self.policy_components[i](state_a,z)  # these are batch_size x T x 1
+            if self.a_dist == 'softmax':
+                a_mean_i = a_mean_i.unsqueeze(dim=2)
             # add to growing list of policy elements
             a_means.append(a_mean_i)
-            a_sigs.append(a_sig_i)
-
+            if not self.a_dist == 'softmax':
+                a_sigs.append(a_sig_i)
+        if self.a_dist == 'softmax':
+            a_means = torch.cat(a_means,dim=2)
+            return a_means, None
         a_means = torch.cat(a_means,dim=-1)
         a_sigs  = torch.cat(a_sigs, dim=-1)
         return a_means, a_sigs
@@ -243,8 +260,8 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             state_a = torch.cat([state]+actions,dim=-1)
             # pass through ith policy component
             a_mean_i,a_sig_i = self.policy_components[i](state_a,z)  # these are batch_size x T x 1
-            # a_i = reparameterize(a_mean_i,a_sig_i)
-            a_i = a_mean_i
+            a_i = self.reparameterize(a_mean_i,a_sig_i)
+            #a_i = a_mean_i
             if self.a_dist == 'tanh_normal':
                 a_i = nn.Tanh()(a_i)
             actions.append(a_i)
@@ -261,6 +278,15 @@ class AutoregressiveLowLevelPolicy(nn.Module):
         action = action.detach().cpu().numpy()
         
         return action.reshape([self.a_dim,])
+
+    def reparameterize(self, mean, std):
+        if self.a_dist=='softmax':
+            intervals = torch.linspace(-1, 1, 21).cuda()
+            max_idx = torch.argmax(mean, dim=3)
+            max_interval = intervals[max_idx]
+            return max_interval
+        eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
+        return mean #+ std*eps
 
 
 class TransformEncoder(nn.Module):
@@ -522,6 +548,7 @@ class SkillModel(nn.Module):
         self.conditional_prior = conditional_prior
         self.train_diffusion_prior = train_diffusion_prior
         self.diffusion_prior = None
+        self.a_dist = a_dist
         
         if encoder_type == 'gru':
             self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim)
@@ -661,6 +688,10 @@ class SkillModel(nn.Module):
             base_dist = Normal.Normal(a_means, a_sigs)
             transform = torch.distributions.transforms.TanhTransform()
             a_dist = TransformedDistribution(base_dist, [transform])
+        elif self.decoder.ll_policy.a_dist == 'softmax':
+            a_dist = torch.distributions.categorical.Categorical(a_means)
+            actions_round = torch.round(actions*10)/10
+            actions = ((actions_round+1)*10).long() #Get class indices
 
         z_post_dist = Normal.Normal(z_post_means, z_post_sigs)
 

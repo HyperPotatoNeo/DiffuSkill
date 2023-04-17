@@ -61,12 +61,13 @@ def test(model, test_state_decoder):
 	return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), None
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--beta', type=float, default=1e-5)
+parser.add_argument('--beta', type=float, default=1.0)
 parser.add_argument('--conditional_prior', type=int, default=1)
 parser.add_argument('--z_dim', type=int, default=64)
 parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
-parser.add_argument('--state_decoder_type', type=str, default='autoregressive')
+parser.add_argument('--state_decoder_type', type=str, default='mlp')
+parser.add_argument('--a_dist', type=str, default='normal')
 args = parser.parse_args()
 
 batch_size = 128
@@ -79,7 +80,7 @@ H = 30
 stride = 1
 n_epochs = 50000
 test_split = .2
-a_dist = 'normal' # 'tanh_normal' or 'normal'
+a_dist = args.a_dist#'normal' # 'tanh_normal' or 'normal'
 encoder_type = 'gru' # 'transformer' #'state_sequence'
 state_decoder_type = args.state_decoder_type
 policy_decoder_type = args.policy_decoder_type
