@@ -119,7 +119,7 @@ action_chunks_train = dataset['actions_train']
 obs_chunks_test = dataset['observations_test']
 action_chunks_test = dataset['actions_test']
 
-filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_diffusion_prior_'+str(train_diffusion_prior)+'_zdim_'+str(z_dim)
+filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_diffusion_prior_'+str(train_diffusion_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
@@ -143,6 +143,7 @@ experiment.log_parameters({'lr':lr,
 							'l2_reg':wd,
 							'beta':beta,
 							'env_name':env_name,
+							'a_dist':a_dist,
 							'filename':filename,
 							'encoder_type':encoder_type,
 							'state_decoder_type':state_decoder_type,
