@@ -13,7 +13,7 @@ class NaivePrioritizedBuffer(object):
         state      = np.expand_dims(state, 0)
         next_state = np.expand_dims(next_state, 0)
         
-        max_prio = self.priorities.max() if self.buffer else 1.0
+        max_prio = self.priorities.max() if self.buffer else 100.0
         
         if len(self.buffer) < self.capacity:
             self.buffer.append((state, action, reward, next_state, done))

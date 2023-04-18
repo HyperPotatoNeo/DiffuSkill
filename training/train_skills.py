@@ -69,6 +69,7 @@ parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
 parser.add_argument('--state_decoder_type', type=str, default='mlp')
 parser.add_argument('--a_dist', type=str, default='normal')
 parser.add_argument('--horizon', type=int, default=30)
+parser.add_argument('--separate_test_trajectories', type=int, default=1)
 args = parser.parse_args()
 
 batch_size = 128
@@ -113,7 +114,7 @@ a_dim = actions.shape[1]
 N_train = int((1-test_split)*N)
 N_test = N - N_train
 
-dataset = get_dataset(env_name, H, stride, test_split)
+dataset = get_dataset(env_name, H, stride, test_split, get_rewards=True, separate_test_trajectories=args.separate_test_trajectories)
 
 obs_chunks_train = dataset['observations_train']
 action_chunks_train = dataset['actions_train']
@@ -159,7 +160,8 @@ inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
 train_loader = DataLoader(
 	inputs_train,
 	batch_size=batch_size,
-	num_workers=0)
+	num_workers=0,
+	shuffle=True)
 
 test_loader = DataLoader(
 	inputs_test,

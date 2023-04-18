@@ -2,7 +2,6 @@ from argparse import ArgumentParser
 import os
 from comet_ml import Experiment
 
-import d4rl
 import gym
 import pickle
 import numpy as np
@@ -26,7 +25,7 @@ class QLearningDataset(Dataset):
         self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
         self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
         self.sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
-        self.rewards_all = (4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
+        self.rewards_all = np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True)#(4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
         self.sample_z = sample_z
         if sample_z:
             self.latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
@@ -64,12 +63,12 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False):
     state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
     latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
     sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
-    rewards_all = (4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
+    rewards_all = np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True)#(4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
     sample_z = sample_z
     if sample_z:
         latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
     
-    n_train = 128 #int(state_all.shape[0] * (1 - test_prop))
+    n_train = int(state_all.shape[0] * (1 - test_prop))
     
     # PER is only for training
     state_all = state_all[:n_train]
@@ -85,8 +84,9 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False):
     return replay_buffer, state_all.shape[-1], latent_all.shape[-1]
 
 def train(args):
-    env = gym.make(args.env)
-    dataset = env.get_dataset()
+    dataset_file = 'data/'+args.env+'.pkl'
+    with open(dataset_file, "rb") as f:
+        dataset = pickle.load(f)
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
 
@@ -103,6 +103,7 @@ def train(args):
         dataload_train = DataLoader(
             torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
         )
+    '''
 
     torch_data_test = QLearningDataset(
         args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split, sample_z=args.sample_z
@@ -110,7 +111,7 @@ def train(args):
     dataload_test = DataLoader(
         torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
-
+    '''
     # create model
     diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
     model = Model_Cond_Diffusion(
@@ -140,11 +141,11 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--net_type', type=str, default='unet')
     parser.add_argument('--n_hidden', type=int, default=512)
-    parser.add_argument('--test_split', type=float, default=0.1)
+    parser.add_argument('--test_split', type=float, default=0.0)
     parser.add_argument('--sample_z', type=int, default=0)
     parser.add_argument('--per_buffer', type=int, default=1)
 
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/older_runs')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--dataset_dir', type=str, default='data/')
     parser.add_argument('--skill_model_filename', type=str)
 

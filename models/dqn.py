@@ -62,7 +62,7 @@ class DDQN(nn.Module):
         return max_z, max_q_vals
 
 
-    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=50, diffusion_model_name='', cfg_weight=0.0, per_buffer = 0.0, batch_size = 128):
+    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=1, diffusion_model_name='', cfg_weight=0.0, per_buffer = 0.0, batch_size = 128):
         assert self.diffusion_prior is not None
         experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
         experiment.log_parameters({'diffusion_prior':diffusion_model_name, 'cfg_weight':cfg_weight, 'per_buffer': per_buffer})
@@ -81,7 +81,8 @@ class DDQN(nn.Module):
             self.q_net_1.train()
             
             if per_buffer:
-                for _ in tqdm(range(808869 // batch_size)): # same num_iters as w/o PER
+                pbar = tqdm(range(898744 // batch_size))
+                for _ in pbar: # same num_iters as w/o PER
                     s0, z, reward, sT, _, indices, weights = dataload_train.sample(batch_size)
                     s0 = torch.FloatTensor(s0).to(self.device)
                     z = torch.FloatTensor(z).to(self.device)
@@ -97,7 +98,7 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
+                    q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
                     
                     bellman_loss  = (q_s0z - q_target).pow(2) * weights
                     prios = bellman_loss[...,0] + 1e-5
@@ -121,7 +122,7 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                    q_target = reward + self.gamma*(reward==0.0)*q_sTz
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
@@ -134,6 +135,7 @@ class DDQN(nn.Module):
 
                     n_batch += 1
                     steps_total += 1
+                    pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
 
                     if steps_total%update_frequency == 0:
                         loss_net_0 /= (steps_net_0+1e-4)
@@ -152,8 +154,8 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                        if steps_total%(5000) == 0:
-                            torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
+                    if steps_total%(5000) == 0:
+                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
             else:
                 pbar = tqdm(dataload_train)
                 for s0,z,sT,reward in pbar:
@@ -221,8 +223,8 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                        if steps_total%(5000) == 0:
-                            torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
+                    if steps_total%(5000) == 0:
+                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
             self.scheduler_0.step()
             self.scheduler_1.step()

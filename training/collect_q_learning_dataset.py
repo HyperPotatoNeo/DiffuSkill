@@ -10,8 +10,9 @@ from models.skill_model import SkillModel
 from utils.utils import get_dataset
 
 def collect_data(args):
-    env = gym.make(args.env)
-    dataset = env.get_dataset()
+    dataset_file = 'data/'+args.env+'.pkl'
+    with open(dataset_file, "rb") as f:
+        dataset = pickle.load(f)
 
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]

@@ -1,4 +1,4 @@
-import d4rl
+#import d4rl
 import gym
 import numpy as np
 import torch
@@ -12,55 +12,56 @@ import random
 
 
 def reparameterize(mean, std):
-	eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
-	return mean + std*eps
+    eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
+    return mean + std*eps
 
 def stable_weighted_log_sum_exp(x,w,sum_dim):
-	a = torch.min(x)
-	ipdb.set_trace()
+    a = torch.min(x)
+    ipdb.set_trace()
 
-	weighted_sum = torch.sum(w * torch.exp(x - a),sum_dim)
+    weighted_sum = torch.sum(w * torch.exp(x - a),sum_dim)
 
-	return a + torch.log(weighted_sum)
+    return a + torch.log(weighted_sum)
 
 def chunks(obs,actions,H,stride):
-	'''
-	obs is a N x 4 array
-	goals is a N x 2 array
-	H is length of chunck
-	stride is how far we move between chunks.  So if stride=H, chunks are non-overlapping.  If stride < H, they overlap
-	'''
-	
-	obs_chunks = []
-	action_chunks = []
-	N = obs.shape[0]
-	for i in range(N//stride - H):
-		start_ind = i*stride
-		end_ind = start_ind + H
-		
-		obs_chunk = torch.tensor(obs[start_ind:end_ind,:],dtype=torch.float32)
+    '''
+    obs is a N x 4 array
+    goals is a N x 2 array
+    H is length of chunck
+    stride is how far we move between chunks.  So if stride=H, chunks are non-overlapping.  If stride < H, they overlap
+    '''
+    
+    obs_chunks = []
+    action_chunks = []
+    N = obs.shape[0]
+    for i in range(N//stride - H):
+        start_ind = i*stride
+        end_ind = start_ind + H
+        
+        obs_chunk = torch.tensor(obs[start_ind:end_ind,:],dtype=torch.float32)
 
-		action_chunk = torch.tensor(actions[start_ind:end_ind,:],dtype=torch.float32)
-		
-		loc_deltas = obs_chunk[1:,:2] - obs_chunk[:-1,:2] #Franka or Maze2d
-		
-		norms = np.linalg.norm(loc_deltas,axis=-1)
-		#USE VALUE FOR THRESHOLD CONDITION BASED ON ENVIRONMENT
-		if np.all(norms <= 0.8): #Antmaze large 0.8 medium 0.67 / Franka 0.23 mixed/complete 0.25 partial / Maze2d 0.22
-			obs_chunks.append(obs_chunk)
-			action_chunks.append(action_chunk)
-		else:
-			pass
+        action_chunk = torch.tensor(actions[start_ind:end_ind,:],dtype=torch.float32)
+        
+        loc_deltas = obs_chunk[1:,:2] - obs_chunk[:-1,:2] #Franka or Maze2d
+        
+        norms = np.linalg.norm(loc_deltas,axis=-1)
+        #USE VALUE FOR THRESHOLD CONDITION BASED ON ENVIRONMENT
+        if np.all(norms <= 0.8): #Antmaze large 0.8 medium 0.67 / Franka 0.23 mixed/complete 0.25 partial / Maze2d 0.22
+            obs_chunks.append(obs_chunk)
+            action_chunks.append(action_chunk)
+        else:
+            pass
 
-	print('len(obs_chunks): ',len(obs_chunks))
-	print('len(action_chunks): ',len(action_chunks))
-			
-	return torch.stack(obs_chunks),torch.stack(action_chunks)
+    print('len(obs_chunks): ',len(obs_chunks))
+    print('len(action_chunks): ',len(action_chunks))
+            
+    return torch.stack(obs_chunks),torch.stack(action_chunks)
 
 
-def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, get_rewards=False):
-    env = gym.make(env_name)
-    dataset = env.get_dataset()
+def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, get_rewards=False, separate_test_trajectories=False):
+    dataset_file = 'data/'+env_name+'.pkl'
+    with open(dataset_file, "rb") as f:
+        dataset = pickle.load(f)
 
     if env_name == 'antmaze-large-diverse-v2':
         observations = []
@@ -116,8 +117,12 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
         print('Total data samples extracted: ', num_samples)
         num_test_samples = int(test_split * num_samples)
 
-        test_indices = np.random.choice(np.arange(num_samples), num_test_samples, replace=False)
-        train_indices = np.array(list(set(np.arange(num_samples)) - set(test_indices)))
+        if separate_test_trajectories:
+            train_indices = np.arange(0, num_samples - num_test_samples)
+            test_indices = np.arange(num_samples - num_test_samples, num_samples)
+        else:
+            test_indices = np.random.choice(np.arange(num_samples), num_test_samples, replace=False)
+            train_indices = np.array(list(set(np.arange(num_samples)) - set(test_indices)))
         np.random.shuffle(train_indices)
 
         observations_train = observations[train_indices]
