@@ -64,10 +64,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--beta', type=float, default=1.0)
 parser.add_argument('--conditional_prior', type=int, default=1)
 parser.add_argument('--z_dim', type=int, default=64)
-parser.add_argument('--lr', type=float, default=1e-4)
+parser.add_argument('--lr', type=float, default=5e-5)
 parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
 parser.add_argument('--state_decoder_type', type=str, default='mlp')
 parser.add_argument('--a_dist', type=str, default='normal')
+parser.add_argument('--horizon', type=int, default=30)
 args = parser.parse_args()
 
 batch_size = 128
@@ -76,7 +77,7 @@ h_dim = 256
 z_dim = args.z_dim
 lr = args.lr#5e-5
 wd = 0.0
-H = 30
+H = args.horizon
 stride = 1
 n_epochs = 50000
 test_split = .2

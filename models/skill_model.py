@@ -284,9 +284,10 @@ class AutoregressiveLowLevelPolicy(nn.Module):
     def reparameterize(self, mean, std):
         if self.a_dist=='softmax':
             intervals = torch.linspace(-1, 1, 21).cuda()
-            max_idx = torch.argmax(mean, dim=3)
+            max_idx = torch.distributions.categorical.Categorical(mean).sample()
+            #max_idx = torch.argmax(mean, dim=2)
             max_interval = intervals[max_idx]
-            return max_interval
+            return max_interval.unsqueeze(-1)
         eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
         return mean #+ std*eps
 
