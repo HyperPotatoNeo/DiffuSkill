@@ -31,8 +31,8 @@ class DDQN(nn.Module):
         
         self.optimizer_0 = optim.Adam(params=self.q_net_0.parameters(), lr=lr)
         self.optimizer_1 = optim.Adam(params=self.q_net_1.parameters(), lr=lr)
-        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=3, gamma=0.3)
-        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=3, gamma=0.3)
+        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=10, gamma=0.3)
+        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=10, gamma=0.3)
 
     @torch.no_grad()
     def get_max_skills(self, states, net=0, is_eval=False):
@@ -73,6 +73,7 @@ class DDQN(nn.Module):
         self.target_net_1.eval()
         loss_net_0, loss_net_1, loss_total = 0, 0, 0 #Logged in comet at update frequency
         epoch = 0
+        beta = 0.3
 
         for ep in tqdm(range(n_epochs), desc="Epoch"):
             n_batch = 0
@@ -83,7 +84,8 @@ class DDQN(nn.Module):
             if per_buffer:
                 pbar = tqdm(range(898744 // batch_size))
                 for _ in pbar: # same num_iters as w/o PER
-                    s0, z, reward, sT, _, indices, weights = dataload_train.sample(batch_size)
+                    s0, z, reward, sT, _, indices, weights = dataload_train.sample(batch_size, beta)
+
                     s0 = torch.FloatTensor(s0).to(self.device)
                     z = torch.FloatTensor(z).to(self.device)
                     sT = torch.FloatTensor(sT).to(self.device)
@@ -99,7 +101,7 @@ class DDQN(nn.Module):
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
                     q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
-                    
+
                     bellman_loss  = (q_s0z - q_target).pow(2) * weights
                     prios = bellman_loss[...,0] + 1e-5
                     bellman_loss  = bellman_loss.mean()
@@ -136,7 +138,7 @@ class DDQN(nn.Module):
                     n_batch += 1
                     steps_total += 1
                     pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
-
+                    
                     if steps_total%update_frequency == 0:
                         loss_net_0 /= (steps_net_0+1e-4)
                         loss_net_1 /= (steps_net_1+1e-4)
@@ -226,6 +228,7 @@ class DDQN(nn.Module):
                     if steps_total%(5000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
+            beta = np.min((beta+0.35,1))
             self.scheduler_0.step()
             self.scheduler_1.step()
             experiment.log_metric("train_loss_episode", loss_ep/n_batch, step=epoch)

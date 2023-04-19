@@ -76,3 +76,5 @@ source activate cvideos
 
 python training/train_skills.py --beta 0.1 --conditional_prior 0 --z_dim 16 --policy_decoder_type 'autoregressive' --state_decoder_type 'mlp'
 python training/train_skills.py --beta 0.01 --conditional_prior 0 --z_dim 16 --policy_decoder_type 'autoregressive' --state_decoder_type 'mlp'
+
+python3 training/collect_q_learning_dataset.py --skill_model_filename 'skill_model_antmaze-large-diverse-v2_encoderType(gru)_state_dec_autoregressive_policy_dec_autoregressive_H_30_b_0.1_conditionalp_1_diffusion_prior_False_zdim_16_adist_softmax_separatetest_True_best_a.pth' --beta 0.1 --horizon 30 --state_decoder_type autoregressive --a_dist softmax
