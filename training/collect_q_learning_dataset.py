@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--env', type=str, default='antmaze-large-diverse-v2')
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/older_runs')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--append_goals', type=int, default=0)

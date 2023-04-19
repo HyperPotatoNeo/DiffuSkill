@@ -6,8 +6,9 @@ import d4rl
 import gym
 import pickle
 import numpy as np
-
+from tqdm import tqdm
 import torch
+from per_utils import NaivePrioritizedBuffer
 from torch.utils.data import Dataset, DataLoader
 
 from models.diffusion_models import (
@@ -58,6 +59,30 @@ class QLearningDataset(Dataset):
 
         return (state, latent, sT, reward)
 
+def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False):
+    # just load it all into RAM
+    state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
+    latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
+    sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
+    rewards_all = (4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
+    sample_z = sample_z
+    if sample_z:
+        latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
+    
+    n_train = 128 #int(state_all.shape[0] * (1 - test_prop))
+    
+    # PER is only for training
+    state_all = state_all[:n_train]
+    latent_all = latent_all[:n_train]
+    sT_all = sT_all[:n_train]
+    rewards_all = rewards_all[:n_train]
+    
+    # load into PER buffer
+    replay_buffer = NaivePrioritizedBuffer(n_train)
+    for i in tqdm(range(n_train)):
+        replay_buffer.push(state_all[i], latent_all[i], rewards_all[i], sT_all[i], 0)
+
+    return replay_buffer, state_all.shape[-1], latent_all.shape[-1]
 
 def train(args):
     env = gym.make(args.env)
@@ -66,21 +91,25 @@ def train(args):
     a_dim = dataset['actions'].shape[1]
 
     # get datasets set up
-    torch_data_train = QLearningDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, sample_z=args.sample_z
-    )
-    dataload_train = DataLoader(
-        torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
-    )
+    if args.per_buffer:
+        per_buffer, x_shape, y_dim = PER_buffer_filler(args.dataset_dir, args.skill_model_filename[:-4], test_prop=args.test_split, sample_z=args.sample_z)
+    else:
+        torch_data_train = QLearningDataset(
+            args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, sample_z=args.sample_z
+        )
+        x_shape = torch_data_train.state_all.shape[1]
+        y_dim = torch_data_train.latent_all.shape[1]
+        
+        dataload_train = DataLoader(
+            torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
+        )
+
     torch_data_test = QLearningDataset(
         args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split, sample_z=args.sample_z
     )
     dataload_test = DataLoader(
         torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
-
-    x_shape = torch_data_train.state_all.shape[1]
-    y_dim = torch_data_train.latent_all.shape[1]
 
     # create model
     diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
@@ -97,7 +126,8 @@ def train(args):
     model.eval()
 
     dqn_agent = DDQN(state_dim = x_shape, z_dim=y_dim, diffusion_prior=model)
-    dqn_agent.learn(dataload_train=dataload_train, diffusion_model_name=args.skill_model_filename[:-4], cfg_weight=args.cfg_weight)
+    dqn_agent.learn(dataload_train=per_buffer if args.per_buffer else dataload_train,
+        diffusion_model_name=args.skill_model_filename[:-4], cfg_weight=args.cfg_weight, per_buffer = args.per_buffer, batch_size = args.batch_size)
 
 
 if __name__ == "__main__":
@@ -107,13 +137,14 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--n_epoch', type=int, default=10000)
     parser.add_argument('--lr', type=float, default=5e-4)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--net_type', type=str, default='unet')
     parser.add_argument('--n_hidden', type=int, default=512)
     parser.add_argument('--test_split', type=float, default=0.1)
     parser.add_argument('--sample_z', type=int, default=0)
+    parser.add_argument('--per_buffer', type=int, default=1)
 
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/older_runs')
     parser.add_argument('--dataset_dir', type=str, default='data/')
     parser.add_argument('--skill_model_filename', type=str)
 

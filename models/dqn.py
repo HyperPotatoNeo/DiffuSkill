@@ -62,10 +62,10 @@ class DDQN(nn.Module):
         return max_z, max_q_vals
 
 
-    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=50, diffusion_model_name='', cfg_weight=0.0):
+    def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=50, diffusion_model_name='', cfg_weight=0.0, per_buffer = 0.0, batch_size = 128):
         assert self.diffusion_prior is not None
         experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
-        experiment.log_parameters({'diffusion_prior':diffusion_model_name, 'cfg_weight':cfg_weight})
+        experiment.log_parameters({'diffusion_prior':diffusion_model_name, 'cfg_weight':cfg_weight, 'per_buffer': per_buffer})
         steps_net_0, steps_net_1, steps_total = 0, 0, 0
         self.target_net_0 = copy.deepcopy(self.q_net_0)
         self.target_net_1 = copy.deepcopy(self.q_net_1)
@@ -79,75 +79,150 @@ class DDQN(nn.Module):
             loss_ep = 0
             self.q_net_0.train()
             self.q_net_1.train()
-            pbar = tqdm(dataload_train)
+            
+            if per_buffer:
+                for _ in tqdm(range(808869 // batch_size)): # same num_iters as w/o PER
+                    s0, z, reward, sT, _, indices, weights = dataload_train.sample(batch_size)
+                    s0 = torch.FloatTensor(s0).to(self.device)
+                    z = torch.FloatTensor(z).to(self.device)
+                    sT = torch.FloatTensor(sT).to(self.device)
+                    reward = torch.FloatTensor(reward)[...,None].to(self.device)
+                    weights = torch.FloatTensor(weights).to(self.device)
+                    #net_id = np.random.binomial(n=1, p=0.5, size=(1,))
+                    net_id = 0
+                    #if net_id==0:
+                    self.optimizer_0.zero_grad()
 
-            for s0,z,sT,reward in pbar:
-                s0 = s0.type(torch.FloatTensor).to(self.device)
-                z = z.type(torch.FloatTensor).to(self.device)
-                sT = sT.type(torch.FloatTensor).to(self.device)
-                reward = reward.type(torch.FloatTensor).to(self.device)
-                #net_id = np.random.binomial(n=1, p=0.5, size=(1,))
-                net_id = 0
-                #if net_id==0:
-                self.optimizer_0.zero_grad()
+                    q_s0z = self.q_net_0(s0,z)
+                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                        self.target_net_1(sT,max_sT_skills.detach()),)
+                    q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
+                    
+                    bellman_loss  = (q_s0z - q_target).pow(2) * weights
+                    prios = bellman_loss[...,0] + 1e-5
+                    bellman_loss  = bellman_loss.mean()
+                    
+                    # bellman_loss = F.mse_loss(q_s0z, q_target)
+                    bellman_loss.backward()
+                    clip_grad_norm_(self.q_net_0.parameters(), 1)
+                    self.optimizer_0.step()
+                    loss_net_0 += bellman_loss.detach().item()
+                    loss_total += bellman_loss.detach().item()
+                    loss_ep += bellman_loss.detach().item()
+                    steps_net_0 += 1
+                    dataload_train.update_priorities(indices, prios.data.cpu().numpy())
+                    
+                    net_id = 1
+                    #else:
+                    self.optimizer_1.zero_grad()
 
-                q_s0z = self.q_net_0(s0,z)
-                max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                      self.target_net_1(sT,max_sT_skills.detach()),)
-                q_target = reward + self.gamma*(reward==-6.0)*q_sTz
-                
-                bellman_loss = F.mse_loss(q_s0z, q_target)
-                bellman_loss.backward()
-                clip_grad_norm_(self.q_net_0.parameters(), 1)
-                self.optimizer_0.step()
-                loss_net_0 += bellman_loss.detach().item()
-                loss_total += bellman_loss.detach().item()
-                loss_ep += bellman_loss.detach().item()
-                steps_net_0 += 1
-                
-                net_id = 1
-                #else:
-                self.optimizer_1.zero_grad()
+                    q_s0z = self.q_net_1(s0,z)
+                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                        self.target_net_1(sT,max_sT_skills.detach()),)
+                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                    
+                    bellman_loss = F.mse_loss(q_s0z, q_target)
+                    bellman_loss.backward()
+                    clip_grad_norm_(self.q_net_1.parameters(), 1)
+                    self.optimizer_1.step()
+                    loss_net_1 += bellman_loss.detach().item()
+                    loss_total += bellman_loss.detach().item()
+                    loss_ep += bellman_loss.detach().item()
+                    steps_net_1 += 1
 
-                q_s0z = self.q_net_1(s0,z)
-                max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                      self.target_net_1(sT,max_sT_skills.detach()),)
-                q_target = reward + self.gamma*(reward==-6.0)*q_sTz
-                
-                bellman_loss = F.mse_loss(q_s0z, q_target)
-                bellman_loss.backward()
-                clip_grad_norm_(self.q_net_1.parameters(), 1)
-                self.optimizer_1.step()
-                loss_net_1 += bellman_loss.detach().item()
-                loss_total += bellman_loss.detach().item()
-                loss_ep += bellman_loss.detach().item()
-                steps_net_1 += 1
+                    n_batch += 1
+                    steps_total += 1
 
-                n_batch += 1
-                steps_total += 1
-                pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
+                    if steps_total%update_frequency == 0:
+                        loss_net_0 /= (steps_net_0+1e-4)
+                        loss_net_1 /= (steps_net_1+1e-4)
+                        loss_total /= 2*update_frequency
+                        experiment.log_metric("train_loss_0", loss_net_0, step=steps_total)
+                        experiment.log_metric("train_loss_1", loss_net_1, step=steps_total)
+                        experiment.log_metric("train_loss", loss_total, step=steps_total)
+                        loss_net_0, loss_net_1, loss_total = 0,0,0
+                        steps_net_0, steps_net_1 = 0,0
+                        #self.target_net_0 = copy.deepcopy(self.q_net_0)
+                        #self.target_net_1 = copy.deepcopy(self.q_net_1)
+                        for target_param, local_param in zip(self.target_net_0.parameters(), self.q_net_0.parameters()):
+                            target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
+                        for target_param, local_param in zip(self.target_net_1.parameters(), self.q_net_1.parameters()):
+                            target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
+                        self.target_net_0.eval()
+                        self.target_net_1.eval()
+                        if steps_total%(5000) == 0:
+                            torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
+            else:
+                pbar = tqdm(dataload_train)
+                for s0,z,sT,reward in pbar:
+                    s0 = s0.type(torch.FloatTensor).to(self.device)
+                    z = z.type(torch.FloatTensor).to(self.device)
+                    sT = sT.type(torch.FloatTensor).to(self.device)
+                    reward = reward.type(torch.FloatTensor).to(self.device)
+                    #net_id = np.random.binomial(n=1, p=0.5, size=(1,))
+                    net_id = 0
+                    #if net_id==0:
+                    self.optimizer_0.zero_grad()
 
-                if steps_total%update_frequency == 0:
-                    loss_net_0 /= (steps_net_0+1e-4)
-                    loss_net_1 /= (steps_net_1+1e-4)
-                    loss_total /= 2*update_frequency
-                    experiment.log_metric("train_loss_0", loss_net_0, step=steps_total)
-                    experiment.log_metric("train_loss_1", loss_net_1, step=steps_total)
-                    experiment.log_metric("train_loss", loss_total, step=steps_total)
-                    loss_net_0, loss_net_1, loss_total = 0,0,0
-                    steps_net_0, steps_net_1 = 0,0
-                    #self.target_net_0 = copy.deepcopy(self.q_net_0)
-                    #self.target_net_1 = copy.deepcopy(self.q_net_1)
-                    for target_param, local_param in zip(self.target_net_0.parameters(), self.q_net_0.parameters()):
-                        target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
-                    for target_param, local_param in zip(self.target_net_1.parameters(), self.q_net_1.parameters()):
-                        target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
-                    self.target_net_0.eval()
-                    self.target_net_1.eval()
-                    if steps_total%(5000) == 0:
-                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'.pt')
+                    q_s0z = self.q_net_0(s0,z)
+                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                        self.target_net_1(sT,max_sT_skills.detach()),)
+                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                    
+                    bellman_loss = F.mse_loss(q_s0z, q_target)
+                    bellman_loss.backward()
+                    clip_grad_norm_(self.q_net_0.parameters(), 1)
+                    self.optimizer_0.step()
+                    loss_net_0 += bellman_loss.detach().item()
+                    loss_total += bellman_loss.detach().item()
+                    loss_ep += bellman_loss.detach().item()
+                    steps_net_0 += 1
+                    
+                    net_id = 1
+                    #else:
+                    self.optimizer_1.zero_grad()
+
+                    q_s0z = self.q_net_1(s0,z)
+                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
+                                        self.target_net_1(sT,max_sT_skills.detach()),)
+                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                    
+                    bellman_loss = F.mse_loss(q_s0z, q_target)
+                    bellman_loss.backward()
+                    clip_grad_norm_(self.q_net_1.parameters(), 1)
+                    self.optimizer_1.step()
+                    loss_net_1 += bellman_loss.detach().item()
+                    loss_total += bellman_loss.detach().item()
+                    loss_ep += bellman_loss.detach().item()
+                    steps_net_1 += 1
+
+                    n_batch += 1
+                    steps_total += 1
+                    pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
+
+                    if steps_total%update_frequency == 0:
+                        loss_net_0 /= (steps_net_0+1e-4)
+                        loss_net_1 /= (steps_net_1+1e-4)
+                        loss_total /= 2*update_frequency
+                        experiment.log_metric("train_loss_0", loss_net_0, step=steps_total)
+                        experiment.log_metric("train_loss_1", loss_net_1, step=steps_total)
+                        experiment.log_metric("train_loss", loss_total, step=steps_total)
+                        loss_net_0, loss_net_1, loss_total = 0,0,0
+                        steps_net_0, steps_net_1 = 0,0
+                        #self.target_net_0 = copy.deepcopy(self.q_net_0)
+                        #self.target_net_1 = copy.deepcopy(self.q_net_1)
+                        for target_param, local_param in zip(self.target_net_0.parameters(), self.q_net_0.parameters()):
+                            target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
+                        for target_param, local_param in zip(self.target_net_1.parameters(), self.q_net_1.parameters()):
+                            target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
+                        self.target_net_0.eval()
+                        self.target_net_1.eval()
+                        if steps_total%(5000) == 0:
+                            torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
             self.scheduler_0.step()
             self.scheduler_1.step()
