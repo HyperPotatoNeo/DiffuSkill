@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import os
 from comet_ml import Experiment
 
-import d4rl
+#import d4rl
 import gym
 import pickle
 import numpy as np
@@ -72,10 +72,10 @@ class PriorDataset(Dataset):
 
 
 def train(args):
-    env = gym.make(args.env)
-    dataset = env.get_dataset()
-    state_dim = dataset['observations'].shape[1]
-    a_dim = dataset['actions'].shape[1]
+    #env = gym.make(args.env)
+    #dataset = env.get_dataset()
+    state_dim = 29#dataset['observations'].shape[1]
+    a_dim = 8#dataset['actions'].shape[1]
 
     experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
     experiment.log_parameters({'lrate':args.lrate,

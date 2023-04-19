@@ -69,7 +69,8 @@ parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
 parser.add_argument('--state_decoder_type', type=str, default='mlp')
 parser.add_argument('--a_dist', type=str, default='normal')
 parser.add_argument('--horizon', type=int, default=30)
-parser.add_argument('--separate_test_trajectories', type=int, default=1)
+parser.add_argument('--separate_test_trajectories', type=int, default=0)
+parser.add_argument('--test_split', type=float, default=0.2)
 args = parser.parse_args()
 
 batch_size = 128
@@ -81,7 +82,7 @@ wd = 0.0
 H = args.horizon
 stride = 1
 n_epochs = 50000
-test_split = .2
+test_split = args.test_split
 a_dist = args.a_dist#'normal' # 'tanh_normal' or 'normal'
 encoder_type = 'gru' # 'transformer' #'state_sequence'
 state_decoder_type = args.state_decoder_type
@@ -118,10 +119,11 @@ dataset = get_dataset(env_name, H, stride, test_split, get_rewards=True, separat
 
 obs_chunks_train = dataset['observations_train']
 action_chunks_train = dataset['actions_train']
-obs_chunks_test = dataset['observations_test']
-action_chunks_test = dataset['actions_test']
+if test_split>0.0:
+	obs_chunks_test = dataset['observations_test']
+	action_chunks_test = dataset['actions_test']
 
-filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_diffusion_prior_'+str(train_diffusion_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist
+filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
@@ -152,62 +154,64 @@ experiment.log_parameters({'lr':lr,
 							'policy_decoder_type':policy_decoder_type,
 							'per_element_sigma':per_element_sigma,
        						'conditional_prior': conditional_prior,
-       						'train_diffusion_prior': train_diffusion_prior})
+       						'train_diffusion_prior': train_diffusion_prior,
+       						'test_split': test_split})
 
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
-inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
+if test_split>0.0:
+	inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
 
 train_loader = DataLoader(
 	inputs_train,
 	batch_size=batch_size,
 	num_workers=0,
 	shuffle=True)
-
-test_loader = DataLoader(
-	inputs_test,
-	batch_size=batch_size,
-	num_workers=0)
+if test_split>0.0:
+	test_loader = DataLoader(
+		inputs_test,
+		batch_size=batch_size,
+		num_workers=0)
 
 min_test_loss = 10**10
 min_test_s_T_loss = 10**10
 min_test_a_loss = 10**10
 for i in range(n_epochs):
+	if test_split>0.0:
+		test_loss, test_s_T_loss, test_a_loss, test_kl_loss, test_diffusion_loss = test(model, test_state_decoder = i > start_training_state_decoder_after)
+		
+		print("--------TEST---------")
+		
+		print('test_loss: ', test_loss)
+		print('test_s_T_loss: ', test_s_T_loss)
+		print('test_a_loss: ', test_a_loss)
+		print('test_kl_loss: ', test_kl_loss)
+		if test_diffusion_loss is not None:
+			print('test_diffusion_loss ', test_diffusion_loss)
+		print(i)
+		experiment.log_metric("test_loss", test_loss, step=i)
+		experiment.log_metric("test_s_T_loss", test_s_T_loss, step=i)
+		experiment.log_metric("test_a_loss", test_a_loss, step=i)
+		experiment.log_metric("test_kl_loss", test_kl_loss, step=i)
+		if test_diffusion_loss is not None:
+			experiment.log_metric("test_diffusion_loss", test_diffusion_loss, step=i)
+		
+		if test_loss < min_test_loss:
+			min_test_loss = test_loss	
+			checkpoint_path = os.path.join(checkpoint_dir,filename+'_best.pth')
+			torch.save({'model_state_dict': model.state_dict(),
+					'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
+		if test_s_T_loss < min_test_s_T_loss:
+			min_test_s_T_loss = test_s_T_loss
 
-	test_loss, test_s_T_loss, test_a_loss, test_kl_loss, test_diffusion_loss = test(model, test_state_decoder = i > start_training_state_decoder_after)
-	
-	print("--------TEST---------")
-	
-	print('test_loss: ', test_loss)
-	print('test_s_T_loss: ', test_s_T_loss)
-	print('test_a_loss: ', test_a_loss)
-	print('test_kl_loss: ', test_kl_loss)
-	if test_diffusion_loss is not None:
-		print('test_diffusion_loss ', test_diffusion_loss)
-	print(i)
-	experiment.log_metric("test_loss", test_loss, step=i)
-	experiment.log_metric("test_s_T_loss", test_s_T_loss, step=i)
-	experiment.log_metric("test_a_loss", test_a_loss, step=i)
-	experiment.log_metric("test_kl_loss", test_kl_loss, step=i)
-	if test_diffusion_loss is not None:
-		experiment.log_metric("test_diffusion_loss", test_diffusion_loss, step=i)
-	
-	if test_loss < min_test_loss:
-		min_test_loss = test_loss	
-		checkpoint_path = os.path.join(checkpoint_dir,filename+'_best.pth')
-		torch.save({'model_state_dict': model.state_dict(),
-				'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
-	if test_s_T_loss < min_test_s_T_loss:
-		min_test_s_T_loss = test_s_T_loss
+			checkpoint_path = os.path.join(checkpoint_dir,filename+'_best_sT.pth')
+			torch.save({'model_state_dict': model.state_dict(),
+					'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
+		if test_a_loss < min_test_a_loss:
+			min_test_a_loss = test_a_loss
 
-		checkpoint_path = os.path.join(checkpoint_dir,filename+'_best_sT.pth')
-		torch.save({'model_state_dict': model.state_dict(),
-				'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
-	if test_a_loss < min_test_a_loss:
-		min_test_a_loss = test_a_loss
-
-		checkpoint_path = os.path.join(checkpoint_dir,filename+'_best_a.pth')
-		torch.save({'model_state_dict': model.state_dict(),
-				'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
+			checkpoint_path = os.path.join(checkpoint_dir,filename+'_best_a.pth')
+			torch.save({'model_state_dict': model.state_dict(),
+					'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
 
 	loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
 	
@@ -215,9 +219,9 @@ for i in range(n_epochs):
 	
 	print('Loss: ', loss)
 	print(i)
-	experiment.log_metric("Loss", loss, step=i)
+	experiment.log_metric("Train loss", loss, step=i)
 
-	if i % 10 == 0:
+	if i % 50 == 0:
 		checkpoint_path = os.path.join(checkpoint_dir,filename+'.pth')
 		torch.save({'model_state_dict': model.state_dict(),
 				'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
