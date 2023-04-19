@@ -222,6 +222,6 @@ for i in range(n_epochs):
 	experiment.log_metric("Train loss", loss, step=i)
 
 	if i % 50 == 0:
-		checkpoint_path = os.path.join(checkpoint_dir,filename+'.pth')
+		checkpoint_path = os.path.join(checkpoint_dir,filename+'_'+str(i)+'_'+'.pth')
 		torch.save({'model_state_dict': model.state_dict(),
 				'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
