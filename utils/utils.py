@@ -9,7 +9,7 @@ from torch.utils.data.dataloader import DataLoader
 import torch.distributions.normal as Normal
 import ipdb
 import random
-
+import pickle
 
 def reparameterize(mean, std):
     eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())

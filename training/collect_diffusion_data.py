@@ -10,11 +10,11 @@ from models.skill_model import SkillModel
 from utils.utils import get_dataset
 
 def collect_data(args):
-    env = gym.make(args.env)
-    dataset = env.get_dataset()
+    #env = gym.make(args.env)
+    #dataset = env.get_dataset()
 
-    state_dim = dataset['observations'].shape[1]
-    a_dim = dataset['actions'].shape[1]
+    state_dim = 29 #dataset['observations'].shape[1]
+    a_dim = 8 #dataset['actions'].shape[1]
 
     skill_model_path = os.path.join(args.checkpoint_dir, args.skill_model_filename)
 
