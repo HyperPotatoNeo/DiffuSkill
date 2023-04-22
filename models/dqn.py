@@ -47,7 +47,8 @@ class DDQN(nn.Module):
             states = states.repeat_interleave(self.num_prior_samples, 0)
         if sample_latents is not None:
             perm = torch.randperm(self.num_prior_samples)[:self.num_prior_samples]
-            z_samples = torch.FloatTensor(sample_latents).to(self.device)[:,perm,:].squeeze(1)
+            sample_latents = sample_latents[:,perm.cpu().numpy(),:]
+            z_samples = torch.FloatTensor(sample_latents).to(self.device).reshape(sample_latents.shape[0]*self.num_prior_samples,sample_latents.shape[2])
         else:
             z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
         if net==0:
@@ -86,7 +87,7 @@ class DDQN(nn.Module):
             self.q_net_1.train()
             
             if per_buffer:
-                pbar = tqdm(range(898744 // batch_size))
+                pbar = tqdm(range(len(dataload_train) // batch_size))
                 for _ in pbar: # same num_iters as w/o PER
                     s0, z, reward, sT, _, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
 
@@ -160,7 +161,7 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                    if steps_total%(5000) == 0:
+                    if steps_total%(3000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
             else:
                 pbar = tqdm(dataload_train)
@@ -229,7 +230,7 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                    if steps_total%(5000) == 0:
+                    if steps_total%(3000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
             beta = np.min((beta+0.35,1))
