@@ -5,7 +5,13 @@ import gym
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
+from models.diffusion_models import (
+    Model_mlp,
+    Model_cnn_mlp,
+    Model_Cond_Diffusion,
+)
 from models.skill_model import SkillModel
 from utils.utils import get_dataset
 
@@ -38,6 +44,20 @@ def collect_data(args):
     skill_model.load_state_dict(checkpoint['model_state_dict'])
     skill_model.eval()
 
+    diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
+
+    diffusion_model = Model_Cond_Diffusion(
+        diffusion_nn_model,
+        betas=(1e-4, 0.02),
+        n_T=args.diffusion_steps,
+        device=args.device,
+        x_dim=state_dim,
+        y_dim=args.z_dim,
+        drop_prob=None,
+        guide_w=args.cfg_weight,
+    )
+    diffusion_model.eval()
+
     dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals, get_rewards=True, cum_rewards=args.cum_rewards)
 
     obs_chunks_train = dataset['observations_train']
@@ -57,8 +77,9 @@ def collect_data(args):
         latent_std_gt = np.zeros((inputs_train.shape[0], args.z_dim))
     sT_gt = np.zeros((inputs_train.shape[0], state_dim))
     rewards_gt = np.zeros((inputs_train.shape[0], 1))
+    diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
 
-    for batch_id, data in enumerate(train_loader):
+    for batch_id, data in enumerate(tqdm(train_loader)):
         data = data.to(args.device)
         states = data[:, :, :skill_model.state_dim]
         actions = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim]
@@ -69,6 +90,12 @@ def collect_data(args):
         states_gt[start_idx : end_idx] = data[:, 0, :skill_model.state_dim+2*args.append_goals].cpu().numpy()
         sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
         rewards_gt[start_idx: end_idx] = np.sum(rewards.cpu().numpy(), axis=1)
+
+        # for sample_id in range(args.batch_size):
+        diffusion_state = states[:, -1, :skill_model.state_dim].repeat_interleave(args.num_diffusion_samples, 0)
+        with torch.no_grad():
+            diffusion_latents_gt[start_idx : end_idx] = torch.stack(diffusion_model.sample_extra(diffusion_state, predict_noise=args.predict_noise, extra_steps=args.extra_steps).chunk(data.shape[0])).cpu().numpy()
+
         output, output_std = skill_model.encoder(states, actions)
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
         if args.save_z_dist:
@@ -79,6 +106,7 @@ def collect_data(args):
         np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
         if args.save_z_dist:
             np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
     else:
@@ -86,6 +114,7 @@ def collect_data(args):
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents.npy', latent_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_sT.npy', sT_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_rewards.npy', rewards_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sample_latents.npy', diffusion_latents_gt)
         if args.save_z_dist:
             np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents_std.npy', latent_std_gt)
 
@@ -102,6 +131,12 @@ if __name__ == '__main__':
     parser.add_argument('--append_goals', type=int, default=0)
     parser.add_argument('--save_z_dist', type=int, default=1)
     parser.add_argument('--cum_rewards', type=int, default=0)
+
+    parser.add_argument('--num_diffusion_samples', type=int, default=1000)
+    parser.add_argument('--diffusion_steps', type=int, default=100)
+    parser.add_argument('--cfg_weight', type=float, default=0.0)
+    parser.add_argument('--extra_steps', type=int, default=5)
+    parser.add_argument('--predict_noise', type=int, default=0)
 
     parser.add_argument('--horizon', type=int, default=30)
     parser.add_argument('--stride', type=int, default=1)
