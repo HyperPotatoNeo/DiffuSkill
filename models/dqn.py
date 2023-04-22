@@ -46,7 +46,7 @@ class DDQN(nn.Module):
             n_states = states.shape[0]
             states = states.repeat_interleave(self.num_prior_samples, 0)
         if sample_latents is not None:
-            perm = torch.randperm(self.num_prior_samples)[:self.num_prior_samples]
+            perm = torch.randperm(1000)[:self.num_prior_samples]
             z_samples = torch.FloatTensor(sample_latents).to(self.device)[:,perm,:].squeeze(1)
         else:
             z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
