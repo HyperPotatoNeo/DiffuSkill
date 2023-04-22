@@ -101,22 +101,22 @@ def collect_data(args):
         if args.save_z_dist:
             latent_std_gt[start_idx : end_idx] = output_std.detach().cpu().numpy().squeeze(1)
 
-    # if not args.append_goals:
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
-    #     if args.save_z_dist:
-    #         np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
-    # else:
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_goals_states.npy', states_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents.npy', latent_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_goals_sT.npy', sT_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_goals_rewards.npy', rewards_gt)
-    #     np.save('data/' + args.skill_model_filename[:-4] + '_goals_samples_latents.npy', diffusion_latents_gt)
-    #     if args.save_z_dist:
-    #         np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents_std.npy', latent_std_gt)
+    if not args.append_goals:
+        np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
+        if args.save_z_dist:
+            np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
+    else:
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_states.npy', states_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents.npy', latent_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sT.npy', sT_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_rewards.npy', rewards_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sample_latents.npy', diffusion_latents_gt)
+        if args.save_z_dist:
+            np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents_std.npy', latent_std_gt)
 
 
 if __name__ == '__main__':
