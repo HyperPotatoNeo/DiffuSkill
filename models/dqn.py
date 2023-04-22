@@ -47,7 +47,9 @@ class DDQN(nn.Module):
             states = states.repeat_interleave(self.num_prior_samples, 0)
         if sample_latents is not None:
             perm = torch.randperm(1000)[:self.num_prior_samples]
-            z_samples = torch.FloatTensor(sample_latents).to(self.device)[:,perm,:].squeeze(1)
+            sample_latents = sample_latents[:,perm.cpu().numpy(),:]
+            z_samples = torch.FloatTensor(sample_latents).to(self.device).reshape(sample_latents.shape[0]*self.num_prior_samples,sample_latents.shape[2])
+
         else:
             z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
         if net==0:
@@ -86,7 +88,7 @@ class DDQN(nn.Module):
             self.q_net_1.train()
             
             if per_buffer:
-                pbar = tqdm(range(898744 // batch_size))
+                pbar = tqdm(range(len(dataload_train) // batch_size))
                 for _ in pbar: # same num_iters as w/o PER
                     s0, z, reward, sT, _, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
 
@@ -104,7 +106,11 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id,sample_latents=max_latents)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
+
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2) * weights
                     prios = bellman_loss[...,0] + 1e-5
@@ -128,8 +134,11 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==0.0)*q_sTz
-                    
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
+
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
                     clip_grad_norm_(self.q_net_1.parameters(), 1)
@@ -160,7 +169,7 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                    if steps_total%(5000) == 0:
+                    if steps_total%(3000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
             else:
                 pbar = tqdm(dataload_train)
@@ -178,7 +187,11 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
@@ -197,7 +210,10 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
@@ -229,7 +245,7 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                    if steps_total%(5000) == 0:
+                    if steps_total%(3000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
             beta = np.min((beta+0.35,1))
