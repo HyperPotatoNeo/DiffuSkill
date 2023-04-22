@@ -112,8 +112,9 @@ class DDQN(nn.Module):
                     else:
                         q_target = (reward + self.gamma * q_sTz).detach()
 
-                    bellman_loss  = (q_s0z - q_target).pow(2) * weights
-                    prios = bellman_loss[...,0] + 1e-5
+                    bellman_loss  = (q_s0z - q_target).pow(2)
+                    prios = bellman_loss[...,0] + 5e-6
+                    bellman_loss = bellman_loss * weights
                     bellman_loss  = bellman_loss.mean()
                     
                     # bellman_loss = F.mse_loss(q_s0z, q_target)
@@ -124,7 +125,6 @@ class DDQN(nn.Module):
                     loss_total += bellman_loss.detach().item()
                     loss_ep += bellman_loss.detach().item()
                     steps_net_0 += 1
-                    dataload_train.update_priorities(indices, prios.data.cpu().numpy())
                     
                     net_id = 1
                     #else:
@@ -139,7 +139,11 @@ class DDQN(nn.Module):
                     else:
                         q_target = (reward + self.gamma * q_sTz).detach()
 
-                    bellman_loss = F.mse_loss(q_s0z, q_target)
+                    bellman_loss  = (q_s0z - q_target).pow(2)
+                    prios += bellman_loss[...,0] + 5e-6
+                    bellman_loss = bellman_loss * weights
+                    bellman_loss  = bellman_loss.mean()
+                    
                     bellman_loss.backward()
                     clip_grad_norm_(self.q_net_1.parameters(), 1)
                     self.optimizer_1.step()
@@ -148,6 +152,7 @@ class DDQN(nn.Module):
                     loss_ep += bellman_loss.detach().item()
                     steps_net_1 += 1
 
+                    dataload_train.update_priorities(indices, prios.data.cpu().numpy()/2)
                     n_batch += 1
                     steps_total += 1
                     pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
@@ -248,7 +253,7 @@ class DDQN(nn.Module):
                     if steps_total%(3000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
-            beta = np.min((beta+0.35,1))
+            beta = np.min((beta+0.03,1))
             self.scheduler_0.step()
             self.scheduler_1.step()
             experiment.log_metric("train_loss_episode", loss_ep/n_batch, step=epoch)
