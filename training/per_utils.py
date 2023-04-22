@@ -8,17 +8,19 @@ class NaivePrioritizedBuffer(object):
         self.pos        = 0
         self.priorities = np.zeros((capacity,), dtype=np.float32)
     
-    def push(self, state, action, reward, next_state, done):
+    def push(self, state, action, reward, next_state, done, max_latent=None):
         assert state.ndim == next_state.ndim
         state      = np.expand_dims(state, 0)
         next_state = np.expand_dims(next_state, 0)
+        if max_latent is not None:
+            max_latent = np.expand_dims(max_latent, 0)
         
         max_prio = self.priorities.max() if self.buffer else 100.0
         
         if len(self.buffer) < self.capacity:
-            self.buffer.append((state, action, reward, next_state, done))
+            self.buffer.append((state, action, reward, next_state, done, max_latent))
         else:
-            self.buffer[self.pos] = (state, action, reward, next_state, done)
+            self.buffer[self.pos] = (state, action, reward, next_state, done, max_latent)
         
         self.priorities[self.pos] = max_prio
         self.pos = (self.pos + 1) % self.capacity
@@ -46,8 +48,9 @@ class NaivePrioritizedBuffer(object):
         rewards     = np.concatenate(batch[2])
         next_states = np.concatenate(batch[3])
         dones       = np.array(batch[4])
+        max_latents = np.concatenate(batch[5])
         
-        return states, actions, rewards, next_states, dones, indices, weights
+        return states, actions, rewards, next_states, dones, indices, weights, max_latents
     
     def update_priorities(self, batch_indices, batch_priorities):
         for idx, prio in zip(batch_indices, batch_priorities):

@@ -358,7 +358,7 @@ def evaluate(args):
     elif args.policy == 'exhaustive':
         policy_fn = exhaustive_policy
     elif args.policy == 'q':
-      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'.pt')).to(args.device)
+      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_PERbuffer.pt')).to(args.device)
       dqn_agent.diffusion_prior = diffusion_model
       dqn_agent.extra_steps = args.extra_steps
       dqn_agent.target_net_0 = dqn_agent.q_net_0
