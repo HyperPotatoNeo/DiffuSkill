@@ -105,7 +105,11 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id,sample_latents=max_latents)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
+
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2) * weights
                     prios = bellman_loss[...,0] + 1e-5
@@ -129,8 +133,11 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==0.0)*q_sTz
-                    
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
+
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
                     clip_grad_norm_(self.q_net_1.parameters(), 1)
@@ -179,7 +186,11 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
@@ -198,7 +209,10 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    q_target = reward + self.gamma*(reward==-6.0)*q_sTz
+                    if 'antmaze' in diffusion_model_name:
+                        q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma * q_sTz).detach()
                     
                     bellman_loss = F.mse_loss(q_s0z, q_target)
                     bellman_loss.backward()
