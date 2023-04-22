@@ -183,7 +183,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
                 if cum_rewards:
                     rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 else:
-                    rewards.append(torch.tensor(np.diff(rew[chunk_start_idx : chunk_end_idx]), dtype=torch.float32))
+                    rewards.append(torch.tensor(np.diff(rew[chunk_start_idx : chunk_end_idx], axis=0, prepend=rew[chunk_start_idx, 0]), dtype=torch.float32))
                 # goals.append(torch.tensor(goal[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
 
         observations = torch.stack(observations)
