@@ -35,7 +35,7 @@ class DDQN(nn.Module):
         self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=10, gamma=0.3)
 
     @torch.no_grad()
-    def get_max_skills(self, states, net=0, is_eval=False):
+    def get_max_skills(self, states, net=0, is_eval=False, sample_latents=None):
         '''
         INPUTS:
             states: batch_size x state_dim
@@ -45,7 +45,11 @@ class DDQN(nn.Module):
         if not is_eval:
             n_states = states.shape[0]
             states = states.repeat_interleave(self.num_prior_samples, 0)
-        z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
+        if sample_latents is not None:
+            perm = torch.randperm(self.num_prior_samples)[:self.num_prior_samples]
+            z_samples = torch.FloatTensor(sample_latents).to(self.device)[:,perm,:].squeeze(1)
+        else:
+            z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
         if net==0:
             q_vals = self.target_net_0(states,z_samples)[:,0]#self.q_net_0(states,z_samples)[:,0]
         else:
@@ -84,7 +88,7 @@ class DDQN(nn.Module):
             if per_buffer:
                 pbar = tqdm(range(898744 // batch_size))
                 for _ in pbar: # same num_iters as w/o PER
-                    s0, z, reward, sT, _, indices, weights = dataload_train.sample(batch_size, beta)
+                    s0, z, reward, sT, _, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
 
                     s0 = torch.FloatTensor(s0).to(self.device)
                     z = torch.FloatTensor(z).to(self.device)
@@ -97,7 +101,7 @@ class DDQN(nn.Module):
                     self.optimizer_0.zero_grad()
 
                     q_s0z = self.q_net_0(s0,z)
-                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id,sample_latents=max_latents)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
                     q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
