@@ -229,6 +229,8 @@ def eval_func(diffusion_model,
               append_goals,
               dqn_agent=None):
 
+    nearby_goals = 0
+
     with torch.no_grad():
         assert num_evals % num_parallel_envs == 0
         num_evals = num_evals // num_parallel_envs
@@ -246,6 +248,7 @@ def eval_func(diffusion_model,
                 goal_state[env_idx][1] = envs[env_idx].target_goal[1]
 
             env_step = 0
+            nearby_goal = 0
 
             while env_step < 1000:
 
@@ -276,6 +279,9 @@ def eval_func(diffusion_model,
                             success_evals += reward
                             state_0[env_idx] = torch.from_numpy(new_state)
 
+                            if np.linalg.norm(state_0[0][:2].cpu().numpy() - np.array([envs[env_idx].target_goal[0], envs[env_idx].target_goal[1]])) < 5:
+                                nearby_goal = 1
+
                             if render and env_idx == 0:
                                 envs[env_idx].render()
 
@@ -286,8 +292,10 @@ def eval_func(diffusion_model,
                 if sum(done) == num_parallel_envs:
                     break
 
+            nearby_goals += nearby_goal
+
             total_runs = (eval_step + 1) * num_parallel_envs
-            print(f'Total successful evaluations: {success_evals} out of {total_runs} i.e. {success_evals / total_runs * 100}%')
+            print(f'Total successful evaluations: {success_evals} out of {total_runs} i.e. {success_evals / total_runs * 100}% and nearby goals {nearby_goals}')
 
 
 def evaluate(args):
@@ -295,8 +303,6 @@ def evaluate(args):
     dataset = env.get_dataset()
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
-
-    checkpoint = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename))
 
     skill_model = SkillModel(state_dim,
                              a_dim,
@@ -313,7 +319,7 @@ def evaluate(args):
                              conditional_prior=args.conditional_prior,
                              ).to(args.device)
 
-    skill_model.load_state_dict(checkpoint['model_state_dict'])
+    skill_model.load_state_dict(torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename))['model_state_dict'])
     skill_model.eval()
 
     if args.append_goals:
@@ -404,7 +410,6 @@ if __name__ == "__main__":
     parser.add_argument('--q_checkpoint_steps', type=int, default=0)
     parser.add_argument('--dataset_dir', type=str, default='data')
     parser.add_argument('--skill_model_filename', type=str)
-    parser.add_argument('--diffusion_model_filename', type=str)
     parser.add_argument('--append_goals', type=int, default=0)
 
     parser.add_argument('--policy', type=str, default='greedy') #greedy/exhaustive/q
