@@ -58,7 +58,7 @@ def chunks(obs,actions,H,stride):
     return torch.stack(obs_chunks),torch.stack(action_chunks)
 
 
-def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, get_rewards=False, separate_test_trajectories=False):
+def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, get_rewards=False, separate_test_trajectories=False, cum_rewards=True):
     dataset_file = 'data/'+env_name+'.pkl'
     with open(dataset_file, "rb") as f:
         dataset = pickle.load(f)
@@ -180,7 +180,10 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
 
                 observations.append(torch.tensor(obs[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
                 actions.append(torch.tensor(act[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
-                rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+                if cum_rewards:
+                    rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+                else:
+                    rewards.append(torch.tensor(np.diff(rew[chunk_start_idx : chunk_end_idx]), dtype=torch.float32))
                 # goals.append(torch.tensor(goal[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
 
         observations = torch.stack(observations)
