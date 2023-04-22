@@ -72,10 +72,12 @@ class PriorDataset(Dataset):
 
 
 def train(args):
-    #env = gym.make(args.env)
-    #dataset = env.get_dataset()
-    state_dim = 29#dataset['observations'].shape[1]
-    a_dim = 8#dataset['actions'].shape[1]
+    if 'antmaze' in args.env:
+        state_dim = 29
+        a_dim = 8
+    elif 'kitchen' in args.env:
+        state_dim = 60
+        a_dim = 9
 
     experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
     experiment.log_parameters({'lrate':args.lrate,

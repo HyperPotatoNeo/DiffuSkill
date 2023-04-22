@@ -10,11 +10,12 @@ from models.skill_model import SkillModel
 from utils.utils import get_dataset
 
 def collect_data(args):
-    #env = gym.make(args.env)
-    #dataset = env.get_dataset()
-
-    state_dim = 29 #dataset['observations'].shape[1]
-    a_dim = 8 #dataset['actions'].shape[1]
+    if 'antmaze' in args.env:
+        state_dim = 29
+        a_dim = 8
+    elif 'kitchen' in args.env:
+        state_dim = 60
+        a_dim = 9
 
     skill_model_path = os.path.join(args.checkpoint_dir, args.skill_model_filename)
 
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--append_goals', type=int, default=0)
     parser.add_argument('--save_z_dist', type=int, default=0)
 
-    parser.add_argument('--horizon', type=int, default=40)
+    parser.add_argument('--horizon', type=int, default=30)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--a_dist', type=str, default='normal')

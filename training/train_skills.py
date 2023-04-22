@@ -61,6 +61,7 @@ def test(model, test_state_decoder):
 	return np.mean(losses), np.mean(s_T_losses), np.mean(a_losses), np.mean(kl_losses), None
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--env_name', type=str, default='antmaze-large-diverse-v2')
 parser.add_argument('--beta', type=float, default=1.0)
 parser.add_argument('--conditional_prior', type=int, default=1)
 parser.add_argument('--z_dim', type=int, default=64)
@@ -72,6 +73,8 @@ parser.add_argument('--horizon', type=int, default=30)
 parser.add_argument('--separate_test_trajectories', type=int, default=0)
 parser.add_argument('--test_split', type=float, default=0.2)
 parser.add_argument('--get_rewards', type=int, default=1)
+parser.add_argument('--num_epochs', type=int, default=50000)
+parser.add_argument('--start_training_state_decoder_after', type=int, default=0)
 args = parser.parse_args()
 
 batch_size = 128
@@ -82,7 +85,7 @@ lr = args.lr#5e-5
 wd = 0.0
 H = args.horizon
 stride = 1
-n_epochs = 50000
+n_epochs = args.num_epochs
 test_split = args.test_split
 a_dist = args.a_dist#'normal' # 'tanh_normal' or 'normal'
 encoder_type = 'gru' # 'transformer' #'state_sequence'
@@ -90,14 +93,13 @@ state_decoder_type = args.state_decoder_type
 policy_decoder_type = args.policy_decoder_type
 load_from_checkpoint = False
 per_element_sigma = True
-start_training_state_decoder_after = 0
+start_training_state_decoder_after = args.start_training_state_decoder_after
 train_diffusion_prior = False
 
 beta = args.beta # 1.0 # 0.1, 0.01, 0.001
 conditional_prior = args.conditional_prior # True
 
-env_name = 'antmaze-large-diverse-v2'
-#env_name = 'kitchen-partial-v0'
+env_name = args.env_name
 
 dataset_file = 'data/'+env_name+'.pkl'
 with open(dataset_file, "rb") as f:
