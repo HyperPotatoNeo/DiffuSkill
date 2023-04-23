@@ -52,6 +52,7 @@ def q_policy(diffusion_model,
         start_idx = env_idx * num_diffusion_samples
         end_idx = start_idx + num_diffusion_samples
 
+        # print('q val', torch.max(q_vals[start_idx:end_idx]))
         max_idx = torch.argmax(q_vals[start_idx:end_idx])
 
         best_state[env_idx] = state[start_idx + max_idx, :state_dim]
@@ -128,6 +129,7 @@ def eval_func(diffusion_model,
 
         for eval_step in range(num_evals):
             state_0 = torch.zeros((num_parallel_envs, state_dim)).to(args.device)
+
             done = [False] * num_parallel_envs
 
             for env_idx in range(len(envs)):
@@ -244,7 +246,7 @@ def evaluate(args):
     elif args.policy == 'diffusion_prior':
         policy_fn = diffusion_prior_policy
     elif args.policy == 'q':
-      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'.pt')).to(args.device)
+      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_PERbuffer.pt')).to(args.device)
       dqn_agent.diffusion_prior = diffusion_model
       dqn_agent.extra_steps = args.extra_steps
       dqn_agent.target_net_0 = dqn_agent.q_net_0
