@@ -78,6 +78,7 @@ def collect_data(args):
     sT_gt = np.zeros((inputs_train.shape[0], state_dim))
     rewards_gt = np.zeros((inputs_train.shape[0], 1))
     diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
+    # prior_latents_gt = np.zeros((inputs_train.shape[0], args.num_prior_samples, args.z_dim))
 
     for batch_id, data in enumerate(tqdm(train_loader)):
         data = data.to(args.device)
@@ -91,7 +92,13 @@ def collect_data(args):
         sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
         rewards_gt[start_idx: end_idx] = np.sum(rewards.cpu().numpy(), axis=1)
 
-        # for sample_id in range(args.batch_size):
+        # with torch.no_grad():
+        #     prior_latent_mean, prior_latent_std = skill_model.prior(states[:, -1, :skill_model.state_dim])
+        #     prior_latent_mean = prior_latent_mean.repeat_interleave(args.num_prior_samples, 0)
+        #     prior_latent_std = prior_latent_std.repeat_interleave(args.num_prior_samples, 0)
+
+        #     prior_latents_gt[start_idx : end_idx] = torch.stack(torch.distributions.normal.Normal(prior_latent_mean, prior_latent_std).sample().chunk(data.shape[0])).cpu().numpy()
+
         diffusion_state = states[:, -1, :skill_model.state_dim].repeat_interleave(args.num_diffusion_samples, 0)
         with torch.no_grad():
             diffusion_latents_gt[start_idx : end_idx] = torch.stack(diffusion_model.sample_extra(diffusion_state, predict_noise=args.predict_noise, extra_steps=args.extra_steps).chunk(data.shape[0])).cpu().numpy()
@@ -107,6 +114,7 @@ def collect_data(args):
         np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
+        # np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', prior_latents_gt)
         if args.save_z_dist:
             np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
     else:
@@ -115,6 +123,7 @@ def collect_data(args):
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_sT.npy', sT_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_rewards.npy', rewards_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_sample_latents.npy', diffusion_latents_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sample_latents.npy', prior_latents_gt)
         if args.save_z_dist:
             np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents_std.npy', latent_std_gt)
 
@@ -133,6 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--cum_rewards', type=int, default=0)
 
     parser.add_argument('--num_diffusion_samples', type=int, default=1000)
+    parser.add_argument('--num_prior_samples', type=int, default=1000)
     parser.add_argument('--diffusion_steps', type=int, default=100)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--extra_steps', type=int, default=5)
