@@ -175,7 +175,7 @@ class DDQN(nn.Module):
                         self.target_net_0.eval()
                         self.target_net_1.eval()
                     if steps_total%(3000) == 0:
-                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
+                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//3000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
             else:
                 pbar = tqdm(dataload_train)
                 for s0,z,sT,reward in pbar:

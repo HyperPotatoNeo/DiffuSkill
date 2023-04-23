@@ -69,7 +69,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
         rewards = []
     # goals = []
 
-    if env_name == 'antmaze-large-diverse-v2':
+    if env_name == 'antmaze-large-diverse-v2' or env_name == 'antmaze-medium-diverse-v2':
 
         num_trajectories = np.where(dataset['timeouts'])[0].shape[0]
         assert num_trajectories == 999, 'Dataset has changed. Review the dataset extraction'
