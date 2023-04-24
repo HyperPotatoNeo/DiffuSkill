@@ -94,12 +94,14 @@ def train(args):
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
-    torch_data_test = PriorDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split, append_goals=args.append_goals, sample_z=args.sample_z
-    )
-    dataload_test = DataLoader(
-        torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
-    )
+
+    if args.test_split > 0.0:
+        torch_data_test = PriorDataset(
+            args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split, append_goals=args.append_goals, sample_z=args.sample_z
+        )
+        dataload_test = DataLoader(
+            torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
+        )
 
     x_shape = torch_data_train.state_all.shape[1]
     y_dim = torch_data_train.latent_all.shape[1]
@@ -123,7 +125,6 @@ def train(args):
     best_test_loss = 10000000
 
     for ep in tqdm(range(args.n_epoch), desc="Epoch"):
-        results_ep = [ep]
         model.train()
 
         # lrate decay
@@ -147,37 +148,39 @@ def train(args):
             optim.step()
         experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
 
-        if args.append_goals:
-            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc.pt'))
-        else:
-            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
-
-        results_ep.append(loss_ep / n_batch)
-
         # test loop
-        model.eval()
-        pbar = tqdm(dataload_test)
-        loss_ep, n_batch = 0, 0
+        if args.test_split > 0.0:
+            if args.append_goals:
+                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc.pt'))
+            else:
+                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
 
-        with torch.no_grad():
-            for x_batch, y_batch in pbar:
-                x_batch = x_batch.type(torch.FloatTensor).to(args.device)
-                y_batch = y_batch.type(torch.FloatTensor).to(args.device)
-                loss = model.loss_on_batch(x_batch, y_batch, args.predict_noise)
-                loss_ep += loss.detach().item()
-                n_batch += 1
-                pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
-        experiment.log_metric("test_loss", loss_ep/n_batch, step=ep)
+            model.eval()
+            pbar = tqdm(dataload_test)
+            loss_ep, n_batch = 0, 0
 
-        if loss_ep < best_test_loss:
-            best_test_loss = loss_ep
+            with torch.no_grad():
+                for x_batch, y_batch in pbar:
+                    x_batch = x_batch.type(torch.FloatTensor).to(args.device)
+                    y_batch = y_batch.type(torch.FloatTensor).to(args.device)
+                    loss = model.loss_on_batch(x_batch, y_batch, args.predict_noise)
+                    loss_ep += loss.detach().item()
+                    n_batch += 1
+                    pbar.set_description(f"test loss: {loss_ep/n_batch:.4f}")
+            experiment.log_metric("test_loss", loss_ep/n_batch, step=ep)
+
+            if loss_ep < best_test_loss:
+                best_test_loss = loss_ep
+                if args.append_goals:
+                    torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt'))
+                else:
+                    torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
+
+        else:
             if args.append_goals:
                 torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt'))
             else:
                 torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
-            # skill_model.diffusion_prior = model
-            # torch.save({'model_state_dict': model.state_dict(),
-            #             'optimizer_state_dict': optimizer.state_dict()}, os.path.join(args.checkpoint_dir, args.skill_model_path))
 
 
 if __name__ == "__main__":
