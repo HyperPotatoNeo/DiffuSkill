@@ -26,13 +26,11 @@ class AWRDataset(Dataset):
         if train_or_test == "train":
             self.state_all = self.state_all[:n_train]
             self.latent_all = self.latent_all[:n_train]
-            self.sT_all = self.sT_all[:n_train]
-            self.rewards_all = self.rewards_all[:n_train]
+            self.advantage_all = self.advantage_all[:n_train]
         elif train_or_test == "test":
             self.state_all = self.state_all[n_train:]
             self.latent_all = self.latent_all[n_train:]
-            self.sT_all = self.sT_all[n_train:]
-            self.rewards_all = self.rewards_all[n_train:]
+            self.advantage_all = self.advantage_all[n_train:]
         else:
             raise NotImplementedError
 
@@ -98,7 +96,7 @@ def train(args):
                             'q_checkpoint_steps':args.q_checkpoint_steps,
                             'beta':args.beta})
     torch_data_train = AWRDataset(
-        'data/', args.skill_model_filename[:-4], train_or_test="train", train_prop=1-args.test_split, q_checkpoint_steps=args.q_checkpoint_steps, beta=args.beta
+        'data/', args.skill_model_filename[:-4], train_or_test="train", test_prop=1-args.test_split, q_checkpoint_steps=args.q_checkpoint_steps, beta=args.beta
     )
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
