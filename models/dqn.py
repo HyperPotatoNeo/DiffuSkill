@@ -11,7 +11,7 @@ import copy
 from tqdm import tqdm
 
 class DDQN(nn.Module):
-    def __init__(self, state_dim, z_dim, h_dim=256, gamma=0.995, tau=0.995, lr=1e-3, num_prior_samples=100, extra_steps=10, device='cuda', diffusion_prior=None):
+    def __init__(self, state_dim, z_dim, h_dim=256, gamma=0.995, tau=0.995, lr=1e-3, num_prior_samples=100, total_prior_samples=1000, extra_steps=10, device='cuda', diffusion_prior=None):
         super(DDQN,self).__init__()
 
         self.state_dim = state_dim
@@ -19,6 +19,7 @@ class DDQN(nn.Module):
         self.gamma = gamma
         self.lr = lr
         self.num_prior_samples = num_prior_samples
+        self.total_prior_samples = total_prior_samples
         self.extra_steps = extra_steps
         self.device = device
         self.tau = tau
@@ -46,7 +47,7 @@ class DDQN(nn.Module):
             n_states = states.shape[0]
             states = states.repeat_interleave(self.num_prior_samples, 0)
         if sample_latents is not None:
-            perm = torch.randperm(1000)[:self.num_prior_samples]
+            perm = torch.randperm(self.total_prior_samples)[:self.num_prior_samples]
             sample_latents = sample_latents[:,perm.cpu().numpy(),:]
             z_samples = torch.FloatTensor(sample_latents).to(self.device).reshape(sample_latents.shape[0]*self.num_prior_samples,sample_latents.shape[2])
 

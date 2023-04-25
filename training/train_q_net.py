@@ -132,7 +132,7 @@ def train(args):
     ).to(args.device)
     model.eval()
 
-    dqn_agent = DDQN(state_dim = x_shape, z_dim=y_dim, diffusion_prior=model)
+    dqn_agent = DDQN(state_dim = x_shape, z_dim=y_dim, diffusion_prior=model, total_prior_samples=args.total_prior_samples)
     dqn_agent.learn(dataload_train=per_buffer if args.per_buffer else dataload_train,
         diffusion_model_name=args.skill_model_filename[:-4], cfg_weight=args.cfg_weight, per_buffer = args.per_buffer, batch_size = args.batch_size)
 
@@ -151,6 +151,7 @@ if __name__ == "__main__":
     parser.add_argument('--sample_z', type=int, default=0)
     parser.add_argument('--per_buffer', type=int, default=1)
     parser.add_argument('--sample_max_latents', type=int, default=1)
+    parser.add_argument('--total_prior_samples', type=int, default=1000)
 
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--dataset_dir', type=str, default='data/')
