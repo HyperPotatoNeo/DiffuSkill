@@ -10,20 +10,18 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from models.dqn import DDQN
+from models.awr_policy import MLP_policy
 
-class QLearningDataset(Dataset):
+class AWRDataset(Dataset):
     def __init__(
-        self, dataset_dir, filename, train_or_test="train", test_prop=0.1, sample_z=False
+        self, dataset_dir, filename, train_or_test="train", test_prop=0.0, q_checkpoint_steps=0, beta=1.0
     ):
         # just load it all into RAM
         self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
         self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
-        self.sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
-        self.rewards_all = np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True)#(4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
-        self.sample_z = sample_z
-        if sample_z:
-            self.latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
-        
+        self.advantage_all = np.load(os.path.join(dataset_dir, filename+'_dqn_agent_'+str(q_checkpoint_steps)+'_advantage.npy'), allow_pickle=True)
+        self.beta = beta
+
         n_train = int(self.state_all.shape[0] * (1 - test_prop))
         if train_or_test == "train":
             self.state_all = self.state_all[:n_train]
@@ -44,13 +42,9 @@ class QLearningDataset(Dataset):
     def __getitem__(self, index):
         state = self.state_all[index]
         latent = self.latent_all[index]
-        if self.sample_z:
-            latent_std = self.latent_all_std[index]
-            latent = np.random.normal(latent,latent_std)
-        sT = self.sT_all[index]
-        reward = self.rewards_all[index]
-
-        return (state, latent, sT, reward)
+        advantage = self.advantage_all[index]
+        weight = np.exp(advantage*self.beta)
+        return (state, latent, weight)
 
 @torch.no_grad()
 def collect_advantage_data(dqn_agent, filename, q_checkpoint_steps):
@@ -97,6 +91,45 @@ def train(args):
     if args.collect_data:
         collect_advantage_data(dqn_agent, args.skill_model_filename[:-4], args.q_checkpoint_steps)
 
+    experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
+    experiment.log_parameters({'lrate':args.lr,
+                            'batch_size':args.batch_size,
+                            'skill_model_filename':args.skill_model_filename,
+                            'q_checkpoint_steps':args.q_checkpoint_steps,
+                            'beta':args.beta})
+    torch_data_train = AWRDataset(
+        'data/', args.skill_model_filename[:-4], train_or_test="train", train_prop=1-args.test_split, q_checkpoint_steps=args.q_checkpoint_steps, beta=args.beta
+    )
+    dataload_train = DataLoader(
+        torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
+    )
+
+    model = MLP_policy(state_dim,args.z_dim)
+    optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+    best_eval_score = -1000
+
+    for ep in tqdm(range(args.n_epoch), desc="Epoch"):
+        # train loop
+        pbar = tqdm(dataload_train)
+        loss_ep, n_batch = 0, 0
+        
+        for state, latent, weight in pbar:
+            state = state.type(torch.FloatTensor).to(args.device)
+            latent = latent.type(torch.FloatTensor).to(args.device)
+            weight = weight.type(torch.FloatTensor).to(args.device)
+
+            latent_pred = model(state)
+            loss = torch.sum(weight*torch.sum((latent_pred-latent)**2, dim=1))
+            optim.zero_grad()
+            loss.backward()
+            loss_ep += loss.detach().item()
+            n_batch += 1
+            pbar.set_description(f"train loss: {loss_ep/n_batch:.4f}")
+            optim.step()
+        experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
+        if ep%args.n_save_epochs == 0:
+            torch.save(model, os.path.join(args.awr_checkpoints, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'awr_policy.pt'))
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -110,14 +143,17 @@ if __name__ == "__main__":
     parser.add_argument('--test_split', type=float, default=0.0)
     parser.add_argument('--total_prior_samples', type=int, default=1000)
     parser.add_argument('--collect_data', type=int, default=1)
+    parser.add_argument('--z_dim', type=int, default=16)
 
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--q_checkpoint_dir', type=str, default='q_checkpoints')
-    parser.add_argument('--awr_checkpoint_dir', type=str, default='awr_checkpoints')
+    parser.add_argument('--awr_checkpoint_dir', type=str, default='awr_checkpoints/')
     parser.add_argument('--dataset_dir', type=str, default='data/')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--q_checkpoint_steps', type=int, default=0)
     parser.add_argument('--beta', type=float, default=1.0)
+    parser.add_argument('--eval', type=int, default=0)
+    parser.add_argument('--n_save_epochs', type=int, default=3)
 
     args = parser.parse_args()
 
