@@ -64,7 +64,6 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
     latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
     sT_all = np.load(os.path.join(dataset_dir, filename + "_sT.npy"), allow_pickle=True)
     rewards_all = np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True)#(4*np.load(os.path.join(dataset_dir, filename + "_rewards.npy"), allow_pickle=True) - 30*4*0.5)/10 #zero-centering
-    sample_z = sample_z
     if sample_z:
         latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
     if sample_max_latents:
