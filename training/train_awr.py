@@ -52,7 +52,10 @@ class QLearningDataset(Dataset):
 
         return (state, latent, sT, reward)
 
+@torch.no_grad()
 def collect_advantage_data(dqn_agent, filename, q_checkpoint_steps):
+    print('collecting data:')
+    dataset_dir = 'data/'
     state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
     latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
     sample_latents = np.load(os.path.join(dataset_dir, filename + "_sample_latents.npy"), allow_pickle=True)
@@ -60,6 +63,7 @@ def collect_advantage_data(dqn_agent, filename, q_checkpoint_steps):
     advantage_data = np.zeros((state_all.shape[0],1))
     batch_size = 64
     for i in range(int(np.ceil(state_all.shape[0]/batch_size))):
+        #print(i,int(np.ceil(state_all.shape[0]/batch_size)))
         idx_start = i*batch_size
         idx_end = min(i*batch_size + batch_size, state_all.shape[0])
         states = torch.tensor(state_all[idx_start:idx_end]).float().cuda()
@@ -87,7 +91,7 @@ def train(args):
     a_dim = dataset['actions'].shape[1]
 
     dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_PERbuffer.pt')).to(args.device)
-    dqn_agent.extra_steps = args.extra_steps
+    dqn_agent.extra_steps = 5#args.extra_steps
     dqn_agent.eval()
 
     if args.collect_data:
@@ -102,7 +106,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_epoch', type=int, default=10000)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--n_hidden', type=int, default=512)
+    parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--test_split', type=float, default=0.0)
     parser.add_argument('--total_prior_samples', type=int, default=1000)
     parser.add_argument('--collect_data', type=int, default=1)
