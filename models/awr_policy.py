@@ -32,3 +32,18 @@ class MLP_policy(nn.Module):
         '''
         z = self.mlp(s)
         return z
+
+class Autoregressive_policy(nn.Module):
+    def __init__(self,state_dim,z_dim,h_dim=256):
+
+        super(Autoregressive_policy,self).__init__()
+        self.policy_components = nn.ModuleList([MLP_policy(state_dim+i,1,h_dim) for i in range(a_dim)])
+        self.state_dim = state_dim
+        
+    def forward(self,state):
+        latents = []
+        for i in range(self.state_dim):
+            state_z = torch.cat([state]+latents,dim=-1)
+            z = self.policy_components[i](state_z)
+            latents.append(z)
+        return torch.cat(latents)

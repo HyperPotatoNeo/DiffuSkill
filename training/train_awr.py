@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from models.dqn import DDQN
-from models.awr_policy import MLP_policy
+from models.awr_policy import MLP_policy, Autoregressive_policy
 
 class AWRDataset(Dataset):
     def __init__(
@@ -102,7 +102,7 @@ def train(args):
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
 
-    model = MLP_policy(state_dim,args.z_dim).cuda()
+    model = Autoregressive_policy(state_dim,args.z_dim).cuda()#MLP_policy(state_dim,args.z_dim).cuda()
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     best_eval_score = -1000
 
