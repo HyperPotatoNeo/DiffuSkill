@@ -75,6 +75,7 @@ parser.add_argument('--test_split', type=float, default=0.2)
 parser.add_argument('--get_rewards', type=int, default=1)
 parser.add_argument('--num_epochs', type=int, default=50000)
 parser.add_argument('--start_training_state_decoder_after', type=int, default=0)
+parser.add_argument('--normalize_latent', type=int, default=0)
 args = parser.parse_args()
 
 batch_size = 128
@@ -126,12 +127,12 @@ if test_split>0.0:
 	obs_chunks_test = dataset['observations_test']
 	action_chunks_test = dataset['actions_test']
 
-filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)
+filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)+'_normalizelatent_'+str(args.normalize_latent)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
 
-model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior).cuda()
+model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior, normalize_latent=args.normalize_latent).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
 if load_from_checkpoint:
@@ -160,7 +161,8 @@ experiment.log_parameters({'lr':lr,
        						'train_diffusion_prior': train_diffusion_prior,
        						'test_split': test_split,
                                                 'separate_test_trajectories': args.separate_test_trajectories,
-                                                'get_rewards': args.get_rewards})
+                                                'get_rewards': args.get_rewards,
+                                                'normalize_latent': args.normalize_latent})
 
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
 if test_split>0.0:
