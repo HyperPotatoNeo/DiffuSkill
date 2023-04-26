@@ -108,7 +108,7 @@ def train(args):
 
     for ep in tqdm(range(args.n_epoch), desc="Epoch"):
         # train loop
-        optim.param_groups[0]["lr"] = args.lr * ((np.cos((ep / 75) * np.pi) + 1))
+        optim.param_groups[0]["lr"] = args.lr * ((np.cos((ep / 150) * np.pi) + 1))
         pbar = tqdm(dataload_train)
         loss_ep, n_batch = 0, 0
         
