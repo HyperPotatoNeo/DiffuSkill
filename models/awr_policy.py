@@ -30,5 +30,5 @@ class MLP_policy(nn.Module):
         OUTPUS:
             z: batch_size x z_dim
         '''
-        z = self.mlp(x)
+        z = self.mlp(s)
         return z

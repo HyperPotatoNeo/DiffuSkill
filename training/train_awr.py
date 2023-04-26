@@ -96,13 +96,13 @@ def train(args):
                             'q_checkpoint_steps':args.q_checkpoint_steps,
                             'beta':args.beta})
     torch_data_train = AWRDataset(
-        'data/', args.skill_model_filename[:-4], train_or_test="train", test_prop=1-args.test_split, q_checkpoint_steps=args.q_checkpoint_steps, beta=args.beta
+        'data/', args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, q_checkpoint_steps=args.q_checkpoint_steps, beta=args.beta
     )
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
     )
 
-    model = MLP_policy(state_dim,args.z_dim)
+    model = MLP_policy(state_dim,args.z_dim).cuda()
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     best_eval_score = -1000
 
@@ -115,9 +115,8 @@ def train(args):
             state = state.type(torch.FloatTensor).to(args.device)
             latent = latent.type(torch.FloatTensor).to(args.device)
             weight = weight.type(torch.FloatTensor).to(args.device)
-
             latent_pred = model(state)
-            loss = torch.sum(weight*torch.sum((latent_pred-latent)**2, dim=1))
+            loss = torch.sum(weight*torch.sum((latent_pred-latent)**2, dim=1))/(latent_pred.shape[0]*latent_pred.shape[1])
             optim.zero_grad()
             loss.backward()
             loss_ep += loss.detach().item()
@@ -126,7 +125,7 @@ def train(args):
             optim.step()
         experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
         if ep%args.n_save_epochs == 0:
-            torch.save(model, os.path.join(args.awr_checkpoints, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'awr_policy.pt'))
+            torch.save(model, os.path.join(args.awr_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_beta_'+str(args.beta)+'_awr_policy.pt'))
 
 
 if __name__ == "__main__":
@@ -151,7 +150,7 @@ if __name__ == "__main__":
     parser.add_argument('--q_checkpoint_steps', type=int, default=0)
     parser.add_argument('--beta', type=float, default=1.0)
     parser.add_argument('--eval', type=int, default=0)
-    parser.add_argument('--n_save_epochs', type=int, default=3)
+    parser.add_argument('--n_save_epochs', type=int, default=5)
 
     args = parser.parse_args()
 
