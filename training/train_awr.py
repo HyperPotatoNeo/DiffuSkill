@@ -125,8 +125,7 @@ def train(args):
             optim.step()
         experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
         if ep%args.n_save_epochs == 0:
-            torch.save(model, os.path.join(args.awr_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_beta_'+str(args.beta)+'_awr_policy.pt'))
-
+            torch.save(model, os.path.join(args.awr_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_beta_'+str(args.beta)+'_'+str(ep//args.n_save_epochs)+'_awr_policy.pt'))
 
 if __name__ == "__main__":
     parser = ArgumentParser()
