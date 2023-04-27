@@ -106,7 +106,7 @@ class DDQN(nn.Module):
             if per_buffer:
                 pbar = tqdm(range(len(dataload_train) // batch_size))
                 for _ in pbar: # same num_iters as w/o PER
-                    s0, z, reward, sT, _, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
+                    s0, z, reward, sT, dones, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
 
                     s0 = torch.FloatTensor(s0).to(self.device)
                     z = torch.FloatTensor(z).to(self.device)
@@ -125,8 +125,10 @@ class DDQN(nn.Module):
 
                     if 'antmaze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
-                    else:
+                    elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma*(dones==0.0)*q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2)
                     prios = bellman_loss[...,0] + 5e-6
@@ -152,8 +154,10 @@ class DDQN(nn.Module):
                                         self.target_net_1(sT,max_sT_skills.detach()),)
                     if 'antmaze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
-                    else:
+                    elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma*(dones==0.0)*q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2)
                     prios += bellman_loss[...,0] + 5e-6

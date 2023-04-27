@@ -68,6 +68,8 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
         latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
     if sample_max_latents:
         max_latents = np.load(os.path.join(dataset_dir, filename + "_sample_latents.npy"), allow_pickle=True)
+    if not 'antmaze' in filename and not 'kitchen' in filename:
+        terminals_all = np.load(os.path.join(dataset_dir, filename + "_terminals.npy"), allow_pickle=True)
     
     n_train = int(state_all.shape[0] * (1 - test_prop))
     
@@ -76,6 +78,8 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
     latent_all = latent_all[:n_train]
     sT_all = sT_all[:n_train]
     rewards_all = rewards_all[:n_train]
+    if not 'antmaze' in filename and not 'kitchen' in filename:
+        terminals_all = terminals_all[:n_train]
     if sample_max_latents:
         max_latents_all = max_latents[:n_train]
     else:
@@ -84,7 +88,10 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
     # load into PER buffer
     replay_buffer = NaivePrioritizedBuffer(n_train)
     for i in tqdm(range(n_train)):
-        replay_buffer.push(state_all[i], latent_all[i], rewards_all[i], sT_all[i], 0, max_latents_all[i])
+        if not 'antmaze' in filename and not 'kitchen' in filename:
+            replay_buffer.push(state_all[i], latent_all[i], rewards_all[i], sT_all[i], terminals_all[i], max_latents_all[i])
+        else:
+            replay_buffer.push(state_all[i], latent_all[i], rewards_all[i], sT_all[i], 0, max_latents_all[i])
 
     return replay_buffer, state_all.shape[-1], latent_all.shape[-1]
 
