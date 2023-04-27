@@ -65,6 +65,7 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
 
     observations = []
     actions = []
+    terminals = []
     if get_rewards:
         rewards = []
     # goals = []
@@ -220,4 +221,65 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
                     )
 
     else:
-        raise NotImplementedError
+        obs = dataset['observations']
+        act = dataset['actions']
+        rew = np.expand_dims(dataset['rewards'],axis=1)
+        dones = np.expand_dims(dataset['terminals'],axis=1)
+        episode_step = 0
+        chunk_idx = 0
+
+        while chunk_idx < rew.shape[0]-horizon+1:
+            chunk_start_idx = chunk_idx
+            chunk_end_idx = chunk_start_idx + horizon
+
+            observations.append(torch.tensor(obs[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            actions.append(torch.tensor(act[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            terminals.append(torch.tensor(dones[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            if np.sum(dones[chunk_start_idx : chunk_end_idx]>0):
+                episode_step = 0
+                chunk_idx += horizon
+            elif(episode_step==1000-horizon):
+                episode_step = 0
+                chunk_idx += horizon
+            else:
+                episode_step += 1
+                chunk_idx += 1
+
+        observations = torch.stack(observations)
+        actions = torch.stack(actions)
+        rewards = torch.stack(rewards)
+        terminals = torch.stack(terminals)
+
+        num_samples = observations.shape[0]
+
+        print('Total data samples extracted: ', num_samples)
+        num_test_samples = int(test_split * num_samples)
+
+        if separate_test_trajectories:
+            train_indices = np.arange(0, num_samples - num_test_samples)
+            test_indices = np.arange(num_samples - num_test_samples, num_samples)
+        else:
+            test_indices = np.random.choice(np.arange(num_samples), num_test_samples, replace=False)
+            train_indices = np.array(list(set(np.arange(num_samples)) - set(test_indices)))
+        np.random.shuffle(train_indices)
+
+        observations_train = observations[train_indices]
+        actions_train = actions[train_indices]
+        rewards_train = rewards[train_indices]
+        terminals_train = terminals[train_indices]
+
+        observations_test = observations[test_indices]
+        actions_test = actions[test_indices]
+        rewards_test = rewards[test_indices]
+        terminals_test = terminals[test_indices]
+
+        return dict(observations_train=observations_train,
+                    actions_train=actions_train,
+                    rewards_train=rewards_train,
+                    terminals_train=terminals_train,
+                    observations_test=observations_test,
+                    actions_test=actions_test,
+                    rewards_test=rewards_test,
+                    terminals_test=terminals_test
+                    )
