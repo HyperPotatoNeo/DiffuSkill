@@ -32,8 +32,8 @@ class DDQN(nn.Module):
         
         self.optimizer_0 = optim.Adam(params=self.q_net_0.parameters(), lr=lr)
         self.optimizer_1 = optim.Adam(params=self.q_net_1.parameters(), lr=lr)
-        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=10, gamma=0.3)
-        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=10, gamma=0.3)
+        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=30, gamma=0.3)
+        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=30, gamma=0.3)
 
 
     @torch.no_grad()
