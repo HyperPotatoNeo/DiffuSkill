@@ -70,6 +70,7 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
         max_latents = np.load(os.path.join(dataset_dir, filename + "_sample_latents.npy"), allow_pickle=True)
     if not 'antmaze' in filename and not 'kitchen' in filename:
         terminals_all = np.load(os.path.join(dataset_dir, filename + "_terminals.npy"), allow_pickle=True)
+        rewards_all = rewards_all/10
     
     n_train = int(state_all.shape[0] * (1 - test_prop))
     

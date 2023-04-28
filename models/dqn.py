@@ -117,6 +117,7 @@ class DDQN(nn.Module):
                     sT = torch.FloatTensor(sT).to(self.device)
                     reward = torch.FloatTensor(reward)[...,None].to(self.device)
                     weights = torch.FloatTensor(weights).to(self.device)
+                    dones = torch.FloatTensor(dones).to(self.device)
                     #net_id = np.random.binomial(n=1, p=0.5, size=(1,))
                     net_id = 0
                     #if net_id==0:
