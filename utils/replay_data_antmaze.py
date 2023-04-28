@@ -3,37 +3,28 @@ import os
 import time
 
 import gym
-import numpy as np
-import torch
-from torch.utils.data import DataLoader
+import d4rl
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('TkAgg')
 
-from models.diffusion_models import (
-    Model_mlp,
-    Model_cnn_mlp,
-    Model_Cond_Diffusion,
-)
-from models.skill_model import SkillModel
-from utils.utils import get_dataset
+from utils import get_dataset
 
 ANTMAZE = plt.imread('img/maze-large.png')
 
 
 def replay_data(args):
-    dataset = get_dataset(args.env, args.horizon, args.stride, 0.0)
+    dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, get_rewards=True)
 
     state_dim = dataset['observations_train'].shape[-1]
     a_dim = dataset['actions_train'].shape[-1]
 
-    plt.imshow(ANTMAZE, extent=[-6, 42, -6, 30])
-
     env = gym.make(args.env)
 
-    for idx, (observation, action) in enumerate(zip(dataset['observations_train'], dataset['actions_train'])):
+    for idx, (observation, action, reward) in enumerate(zip(dataset['observations_train'], dataset['actions_train'], dataset['rewards_train'])):
         env.set_state(observation[0, :15], observation[0, 15:])
         env.render()
+        # print(reward[0])
         # time.sleep(0.1)
 
 if __name__ == '__main__':
