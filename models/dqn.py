@@ -96,6 +96,10 @@ class DDQN(nn.Module):
         loss_net_0, loss_net_1, loss_total = 0, 0, 0 #Logged in comet at update frequency
         epoch = 0
         beta = 0.3
+        if 'antmaze' in diffusion_model_name or 'kitchen' in diffusion_model_name:
+            update_steps = 3000
+        else:
+            update_steps = 1500
 
         for ep in tqdm(range(n_epochs), desc="Epoch"):
             n_batch = 0
@@ -194,8 +198,8 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                    if steps_total%(3000) == 0:
-                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//3000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
+                    if steps_total%(update_steps) == 0:
+                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//update_steps)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
             else:
                 pbar = tqdm(dataload_train)
                 for s0,z,sT,reward in pbar:
