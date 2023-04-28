@@ -1,22 +1,9 @@
 from argparse import ArgumentParser
-import os
 import time
 
 import gym
-import numpy as np
-import torch
-from torch.utils.data import DataLoader
-import matplotlib
-import matplotlib.pyplot as plt
-matplotlib.use('TkAgg')
 
-from models.diffusion_models import (
-    Model_mlp,
-    Model_cnn_mlp,
-    Model_Cond_Diffusion,
-)
-from models.skill_model import SkillModel
-from utils.utils import get_dataset
+from utils import get_dataset
 
 import gym
 import d4rl
