@@ -143,7 +143,8 @@ def eval_func(diffusion_model,
               render,
               append_goals,
               dqn_agent=None,
-              awr_model=None):
+              awr_model=None,
+              env_name=None):
 
     with torch.no_grad():
         assert num_evals % num_parallel_envs == 0
@@ -160,8 +161,12 @@ def eval_func(diffusion_model,
                 state_0[env_idx] = torch.from_numpy(envs[env_idx].reset())
 
             env_step = 0
+            if 'kitchen' in env_name:
+              total_steps = 280
+            else:
+              total_steps = 1000
 
-            while env_step < 280:
+            while env_step < total_steps:
 
                 best_latent = policy(
                                 diffusion_model,
@@ -193,14 +198,17 @@ def eval_func(diffusion_model,
                                 envs[env_idx].render()
 
                     env_step += 1
-                    if env_step > 280:
+                    if env_step > total_steps:
                         break
 
                 if sum(done) == num_parallel_envs:
                     break
 
             total_runs = (eval_step + 1) * num_parallel_envs
-            print(f'Total score: {scores / 4.0} out of {total_runs} i.e. {scores / total_runs * 25}%')
+            if 'kitchen' in env_name:
+              print(f'Total score: {scores / 4.0} out of {total_runs} i.e. {scores / total_runs * 25}%')
+            else:
+              print(f'Total score: {scores} out of {total_runs} i.e. {scores / total_runs}%')
 
 
 def evaluate(args):
@@ -305,7 +313,8 @@ def evaluate(args):
               args.render,
               args.append_goals,
               dqn_agent,
-              awr_model
+              awr_model,
+              args.env
               )
 
 

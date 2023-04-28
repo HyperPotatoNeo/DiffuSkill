@@ -66,8 +66,8 @@ def collect_data(args):
     if not 'antmaze' in args.env and not 'kitchen' in args.env:
         terminals_chunks_train = dataset['terminals_train']
         inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train, terminals_chunks_train], dim=-1)
-
-    inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train], dim=-1)
+    else:
+        inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train], dim=-1)
 
     train_loader = DataLoader(
         inputs_train,
