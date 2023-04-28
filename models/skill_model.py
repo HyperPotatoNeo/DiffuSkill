@@ -361,12 +361,13 @@ class GRUEncoder(nn.Module):
     -Pass through bidirectional RNN
     -Pass output of bidirectional RNN through 2 linear layers, one to get mean of z and one to get stand dev (we're estimating one z ("skill") for entire episode)
     '''
-    def __init__(self,state_dim,a_dim,z_dim,h_dim,n_gru_layers=4):
+    def __init__(self,state_dim,a_dim,z_dim,h_dim,n_gru_layers=4,normalize_latent=False):
         super(GRUEncoder, self).__init__()
 
 
         self.state_dim = state_dim # state dimension
         self.a_dim = a_dim # action dimension
+        self.normalize_latent = normalize_latent
 
         self.emb_layer  = nn.Sequential(nn.Linear(state_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,h_dim),nn.ReLU())
         self.rnn        = nn.GRU(h_dim+a_dim,h_dim,batch_first=True,bidirectional=True,num_layers=n_gru_layers)
@@ -397,6 +398,9 @@ class GRUEncoder(nn.Module):
 
         z_mean = self.mean_layer(hn)
         z_sig = self.sig_layer(hn)
+
+        if self.normalize_latent:
+            z_mean = z_mean/torch.norm(z_mean, dim=-1).unsqueeze(-1)
         
         return z_mean, z_sig
         
@@ -540,7 +544,7 @@ class GenerativeModel(nn.Module):
 
 
 class SkillModel(nn.Module):
-    def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True,train_diffusion_prior=False):
+    def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True,train_diffusion_prior=False,normalize_latent=False):
         super(SkillModel, self).__init__()
 
         self.state_dim = state_dim # state dimension
@@ -552,9 +556,10 @@ class SkillModel(nn.Module):
         self.train_diffusion_prior = train_diffusion_prior
         self.diffusion_prior = None
         self.a_dist = a_dist
+        self.normalize_latent = normalize_latent
         
         if encoder_type == 'gru':
-            self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim)
+            self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim,normalize_latent=normalize_latent)
         elif encoder_type == 'transformer':
             self.encoder = TransformEncoder(state_dim,a_dim,z_dim,h_dim,horizon)
 
@@ -598,8 +603,11 @@ class SkillModel(nn.Module):
 
         # STEP 1. Encode states and actions to get posterior over z
         z_post_means,z_post_sigs = self.encoder(states,actions)
-        # STEP 2. sample z from posterior 
-        z_sampled = self.reparameterize(z_post_means,z_post_sigs)
+        # STEP 2. sample z from posterior
+        if not self.normalize_latent: 
+            z_sampled = self.reparameterize(z_post_means,z_post_sigs)
+        else:
+            z_sampled = z_post_means
 
         # STEP 3. Pass z_sampled and states through decoder 
         if state_decoder:
@@ -698,16 +706,20 @@ class SkillModel(nn.Module):
 
         z_post_dist = Normal.Normal(z_post_means, z_post_sigs)
 
-        if self.conditional_prior:
-            z_prior_means,z_prior_sigs = self.prior(states[:,0:1,:]) 
-            z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs) 
-        else:
-            z_prior_means = torch.zeros_like(z_post_means)
-            z_prior_sigs = torch.ones_like(z_post_sigs)
-            z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs)
+        if not self.normalize_latent:
+            if self.conditional_prior:
+                z_prior_means,z_prior_sigs = self.prior(states[:,0:1,:]) 
+                z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs) 
+            else:
+                z_prior_means = torch.zeros_like(z_post_means)
+                z_prior_sigs = torch.ones_like(z_post_sigs)
+                z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs)
 
         a_loss   = -torch.mean(torch.sum(a_dist.log_prob(actions), dim=-1))
-        kl_loss = torch.mean(torch.sum(KL.kl_divergence(z_post_dist, z_prior_dist), dim=-1))/T 
+        if not self.normalize_latent:
+            kl_loss = torch.mean(torch.sum(KL.kl_divergence(z_post_dist, z_prior_dist), dim=-1))/T 
+        else:
+            kl_loss = torch.tensor(0.0).cuda()
 
         if self.train_diffusion_prior:
             diffusion_loss = self.diffusion_prior.loss_on_batch(states[:, 0, :], z_sampled[:,0,:].detach(), predict_noise=0)

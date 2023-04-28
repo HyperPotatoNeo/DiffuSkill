@@ -21,6 +21,26 @@ from models.skill_model import SkillModel
 
 import multiprocessing as mp
 
+def awr_policy(diffusion_model,
+        skill_model,
+        state_0,
+        state_mean,
+        state_std,
+        latent_mean,
+        latent_std,
+        num_parallel_envs,
+        num_diffusion_samples,
+        extra_steps,
+        predict_noise,
+        append_goals,
+        dqn_agent,
+        awr_model
+    ):
+    
+    latent = awr_model(state_0)
+    return latent
+
+
 def q_policy(diffusion_model,
         skill_model,
         state_0,
@@ -33,7 +53,8 @@ def q_policy(diffusion_model,
         extra_steps,
         predict_noise,
         append_goals,
-        dqn_agent
+        dqn_agent,
+        awr_model
     ):
 
     state_dim = state_0.shape[1]
@@ -72,7 +93,8 @@ def diffusion_prior_policy(diffusion_model,
         extra_steps,
         predict_noise,
         append_goals,
-        dqn_agent
+        dqn_agent,
+        awr_model
     ):
 
     state_dim = state_0.shape[1]
@@ -93,7 +115,8 @@ def prior_policy(diffusion_model,
         extra_steps,
         predict_noise,
         append_goals,
-        dqn_agent
+        dqn_agent,
+        awr_model
     ):
 
     state_dim = state_0.shape[1]
@@ -119,7 +142,9 @@ def eval_func(diffusion_model,
               predict_noise,
               render,
               append_goals,
-              dqn_agent=None):
+              dqn_agent=None,
+              awr_model=None,
+              env_name=None):
 
     with torch.no_grad():
         assert num_evals % num_parallel_envs == 0
@@ -136,8 +161,12 @@ def eval_func(diffusion_model,
                 state_0[env_idx] = torch.from_numpy(envs[env_idx].reset())
 
             env_step = 0
+            if 'kitchen' in env_name:
+              total_steps = 280
+            else:
+              total_steps = 1000
 
-            while env_step < 280:
+            while env_step < total_steps:
 
                 best_latent = policy(
                                 diffusion_model,
@@ -152,7 +181,8 @@ def eval_func(diffusion_model,
                                 extra_steps,
                                 predict_noise,
                                 append_goals,
-                                dqn_agent
+                                dqn_agent,
+                                awr_model
                             )
 
                 for _ in range(exec_horizon):
@@ -168,14 +198,17 @@ def eval_func(diffusion_model,
                                 envs[env_idx].render()
 
                     env_step += 1
-                    if env_step > 280:
+                    if env_step > total_steps:
                         break
 
                 if sum(done) == num_parallel_envs:
                     break
 
             total_runs = (eval_step + 1) * num_parallel_envs
-            print(f'Total score: {scores / 4.0} out of {total_runs} i.e. {scores / total_runs * 25}%')
+            if 'kitchen' in env_name:
+              print(f'Total score: {scores / 4.0} out of {total_runs} i.e. {scores / total_runs * 25}%')
+            else:
+              print(f'Total score: {scores} out of {total_runs} i.e. {scores / total_runs}%')
 
 
 def evaluate(args):
@@ -184,6 +217,7 @@ def evaluate(args):
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
 
+    skill_model = None
     skill_model = SkillModel(state_dim,
                              a_dim,
                              args.z_dim,
@@ -203,7 +237,7 @@ def evaluate(args):
     skill_model.eval()
 
     diffusion_model = None
-    if not args.policy == 'prior':
+    if not args.policy == 'prior' and not args.policy == 'awr':
         if args.append_goals:
           diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt')).to(args.device)
         else:
@@ -241,6 +275,7 @@ def evaluate(args):
       latent_std = 1#torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
 
     dqn_agent = None
+    awr_model = None
     if args.policy == 'prior':
         policy_fn = prior_policy
     elif args.policy == 'diffusion_prior':
@@ -253,6 +288,10 @@ def evaluate(args):
       dqn_agent.eval()
       dqn_agent.num_prior_samples = args.num_diffusion_samples
       policy_fn = q_policy
+    elif args.policy == 'awr':
+      awr_model = torch.load(os.path.join(args.awr_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_beta_'+str(args.beta)+'_'+str(args.awr_checkpoint_steps)+'_awr_policy.pt')).to(args.device)
+      awr_model.eval()
+      policy_fn = awr_policy
     else:
         raise NotImplementedError
 
@@ -273,7 +312,9 @@ def evaluate(args):
               args.predict_noise,
               args.render,
               args.append_goals,
-              dqn_agent
+              dqn_agent,
+              awr_model,
+              args.env
               )
 
 
@@ -288,11 +329,13 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
     parser.add_argument('--q_checkpoint_dir', type=str, default='q_checkpoints')
     parser.add_argument('--q_checkpoint_steps', type=int, default=0)
+    parser.add_argument('--awr_checkpoint_dir', type=str, default='awr_checkpoints/')
+    parser.add_argument('--awr_checkpoint_steps', type=int, default=0)
     parser.add_argument('--dataset_dir', type=str, default='data')
     parser.add_argument('--skill_model_filename', type=str)
     parser.add_argument('--append_goals', type=int, default=0)
 
-    parser.add_argument('--policy', type=str, default='q') #greedy/exhaustive/q
+    parser.add_argument('--policy', type=str, default='q') #greedy/exhaustive/q/awr
     parser.add_argument('--num_diffusion_samples', type=int, default=50)
     parser.add_argument('--diffusion_steps', type=int, default=100)
     parser.add_argument('--cfg_weight', type=float, default=0.0)

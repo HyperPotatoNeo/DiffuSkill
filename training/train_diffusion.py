@@ -85,7 +85,8 @@ def train(args):
                             'net_type':args.net_type,
                             'sample_z':args.sample_z,
                             'diffusion_steps':args.diffusion_steps,
-                            'skill_model_filename':args.skill_model_filename})
+                            'skill_model_filename':args.skill_model_filename,
+                            'normalize_latent':args.normalize_latent})
 
     # get datasets set up
     torch_data_train = PriorDataset(
@@ -119,6 +120,7 @@ def train(args):
         y_dim=y_dim,
         drop_prob=args.drop_prob,
         guide_w=0.0,
+        normalize_latent=args.normalize_latent
     ).to(args.device)
 
     optim = torch.optim.Adam(model.parameters(), lr=args.lrate)
@@ -205,6 +207,7 @@ if __name__ == "__main__":
     parser.add_argument('--diffusion_steps', type=int, default=50)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--predict_noise', type=int, default=0)
+    parser.add_argument('--normalize_latent', type=int, default=0)
 
     args = parser.parse_args()
 

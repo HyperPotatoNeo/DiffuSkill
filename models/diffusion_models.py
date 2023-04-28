@@ -433,7 +433,7 @@ def ddpm_schedules(beta1, beta2, T, is_linear=True):
 
 
 class Model_Cond_Diffusion(nn.Module):
-    def __init__(self, nn_model, betas, n_T, device, x_dim, y_dim, drop_prob=0.1, guide_w=0.0):
+    def __init__(self, nn_model, betas, n_T, device, x_dim, y_dim, drop_prob=0.1, guide_w=0.0, normalize_latent=False):
         super(Model_Cond_Diffusion, self).__init__()
         for k, v in ddpm_schedules(betas[0], betas[1], n_T).items():
             self.register_buffer(k, v)
@@ -446,6 +446,7 @@ class Model_Cond_Diffusion(nn.Module):
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.guide_w = guide_w
+        self.normalize_latent = normalize_latent
 
     def loss_on_batch(self, x_batch, y_batch, predict_noise=True):
         _ts = torch.randint(1, self.n_T + 1, (y_batch.shape[0], 1)).to(self.device)
@@ -458,6 +459,8 @@ class Model_Cond_Diffusion(nn.Module):
 
         # add noise to clean target actions
         y_t = self.sqrtab[_ts] * y_batch + self.sqrtmab[_ts] * noise
+        if self.normalize_latent:
+            y_t = y_t/torch.norm(y_t, dim=-1).unsqueeze(-1)
 
         # use nn model to predict noise
         if self.nn_model.net_type == 'unet':
@@ -465,6 +468,8 @@ class Model_Cond_Diffusion(nn.Module):
         else:
             noise_pred_batch = self.nn_model(y_t, x_batch, _ts / self.n_T, context_mask)
 
+        if self.normalize_latent:
+            noise_pred_batch = noise_pred_batch/torch.norm(noise_pred_batch, dim=-1).unsqueeze(-1)
         # return mse between predicted and true noise
         if predict_noise:
             return self.loss_mse(noise, noise_pred_batch)
@@ -578,6 +583,9 @@ class Model_Cond_Diffusion(nn.Module):
             t_is = torch.tensor([i / self.n_T]).to(self.device)
             t_is = t_is.repeat(n_sample, 1)
 
+            if self.normalize_latent:
+                y_i = y_i/torch.norm(y_i, dim=-1).unsqueeze(-1)
+
             if not is_zero:
                 # double batch
                 y_i = y_i.repeat(2, 1)
@@ -590,6 +598,10 @@ class Model_Cond_Diffusion(nn.Module):
                 eps = self.nn_model(y_i, x_batch, t_is*self.n_T, context_mask)
             else:
                 eps = self.nn_model(y_i, x_batch, t_is, context_mask)
+
+            if self.normalize_latent:
+                eps = eps/torch.norm(eps,dim=-1).unsqueeze(-1)
+
             if not is_zero:
                 eps1 = eps[:n_sample]
                 eps2 = eps[n_sample:]
@@ -606,6 +618,9 @@ class Model_Cond_Diffusion(nn.Module):
             y_i = self.oneover_sqrta[i] * (y_i - eps * self.mab_over_sqrtmab[i]) + self.sqrt_beta_t[i] * z
             if return_y_trace and (i % 20 == 0 or i == self.n_T or i < 8):
                 y_i_store.append(y_i.detach().cpu().numpy())
+
+        if self.normalize_latent:
+            y_i = y_i/torch.norm(y_i, dim=-1).unsqueeze(-1)
 
         if return_y_trace:
             return y_i, y_i_store

@@ -35,6 +35,21 @@ class DDQN(nn.Module):
         self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=10, gamma=0.3)
         self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=10, gamma=0.3)
 
+
+    @torch.no_grad()
+    def get_q(self, states, sample_latents=None, n_samples=1000):
+        if sample_latents is not None:
+            perm = torch.randperm(self.total_prior_samples)[:n_samples]
+            z_samples = torch.FloatTensor(sample_latents).to(self.device).reshape(sample_latents.shape[0]*n_samples,sample_latents.shape[2])
+        else:
+            z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
+
+        q_vals_0 = self.q_net_0(states,z_samples)[:,0]
+        q_vals_1 = self.q_net_1(states,z_samples)[:,0]
+        q_vals = torch.minimum(q_vals_0, q_vals_1)
+        return z_samples, q_vals
+
+
     @torch.no_grad()
     def get_max_skills(self, states, net=0, is_eval=False, sample_latents=None):
         '''
@@ -81,6 +96,10 @@ class DDQN(nn.Module):
         loss_net_0, loss_net_1, loss_total = 0, 0, 0 #Logged in comet at update frequency
         epoch = 0
         beta = 0.3
+        if 'antmaze' in diffusion_model_name or 'kitchen' in diffusion_model_name:
+            update_steps = 3000
+        else:
+            update_steps = 1500
 
         for ep in tqdm(range(n_epochs), desc="Epoch"):
             n_batch = 0
@@ -91,13 +110,14 @@ class DDQN(nn.Module):
             if per_buffer:
                 pbar = tqdm(range(len(dataload_train) // batch_size))
                 for _ in pbar: # same num_iters as w/o PER
-                    s0, z, reward, sT, _, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
+                    s0, z, reward, sT, dones, indices, weights, max_latents = dataload_train.sample(batch_size, beta)
 
                     s0 = torch.FloatTensor(s0).to(self.device)
                     z = torch.FloatTensor(z).to(self.device)
                     sT = torch.FloatTensor(sT).to(self.device)
                     reward = torch.FloatTensor(reward)[...,None].to(self.device)
                     weights = torch.FloatTensor(weights).to(self.device)
+                    dones = torch.FloatTensor(dones).to(self.device)
                     #net_id = np.random.binomial(n=1, p=0.5, size=(1,))
                     net_id = 0
                     #if net_id==0:
@@ -110,8 +130,10 @@ class DDQN(nn.Module):
 
                     if 'antmaze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
-                    else:
+                    elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma*(dones==0.0)*q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2)
                     prios = bellman_loss[...,0] + 5e-6
@@ -137,8 +159,10 @@ class DDQN(nn.Module):
                                         self.target_net_1(sT,max_sT_skills.detach()),)
                     if 'antmaze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
-                    else:
+                    elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
+                    else:
+                        q_target = (reward + self.gamma*(dones==0.0)*q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2)
                     prios += bellman_loss[...,0] + 5e-6
@@ -175,8 +199,8 @@ class DDQN(nn.Module):
                             target_param.data.copy_((1.0-self.tau)*local_param.data + (self.tau)*target_param.data)
                         self.target_net_0.eval()
                         self.target_net_1.eval()
-                    if steps_total%(3000) == 0:
-                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//3000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
+                    if steps_total%(update_steps) == 0:
+                        torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//update_steps)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
             else:
                 pbar = tqdm(dataload_train)
                 for s0,z,sT,reward in pbar:

@@ -63,8 +63,11 @@ def collect_data(args):
     obs_chunks_train = dataset['observations_train']
     action_chunks_train = dataset['actions_train']
     rewards_chunks_train = dataset['rewards_train']
-
-    inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train], dim=-1)
+    if not 'antmaze' in args.env and not 'kitchen' in args.env:
+        terminals_chunks_train = dataset['terminals_train']
+        inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train, terminals_chunks_train], dim=-1)
+    else:
+        inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train], dim=-1)
 
     train_loader = DataLoader(
         inputs_train,
@@ -78,19 +81,27 @@ def collect_data(args):
     sT_gt = np.zeros((inputs_train.shape[0], state_dim))
     rewards_gt = np.zeros((inputs_train.shape[0], 1))
     diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
+    if not 'antmaze' in args.env and not 'kitchen' in args.env:
+        terminals_gt = np.zeros((inputs_train.shape[0], 1))
     # prior_latents_gt = np.zeros((inputs_train.shape[0], args.num_prior_samples, args.z_dim))
 
     for batch_id, data in enumerate(tqdm(train_loader)):
         data = data.to(args.device)
         states = data[:, :, :skill_model.state_dim]
         actions = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim]
-        rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:]
+        if not 'antmaze' in args.env and not 'kitchen' in args.env:
+            rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:skill_model.state_dim+2*args.append_goals+a_dim+1]
+            terminals = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim+1:]
+        else:
+            rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:]
 
         start_idx = batch_id * args.batch_size
         end_idx = start_idx + args.batch_size
         states_gt[start_idx : end_idx] = data[:, 0, :skill_model.state_dim+2*args.append_goals].cpu().numpy()
         sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
         rewards_gt[start_idx: end_idx] = np.sum(rewards.cpu().numpy(), axis=1)
+        if not 'antmaze' in args.env and not 'kitchen' in args.env:
+            terminals_gt[start_idx: end_idx] = np.sum(terminals.cpu().numpy(), axis=1)
 
         # with torch.no_grad():
         #     prior_latent_mean, prior_latent_std = skill_model.prior(states[:, -1, :skill_model.state_dim])
@@ -117,6 +128,8 @@ def collect_data(args):
         # np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', prior_latents_gt)
         if args.save_z_dist:
             np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
+        if not 'antmaze' in args.env and not 'kitchen' in args.env:
+            np.save('data/' + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
     else:
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_states.npy', states_gt)
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents.npy', latent_gt)
