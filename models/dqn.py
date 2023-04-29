@@ -32,8 +32,8 @@ class DDQN(nn.Module):
         
         self.optimizer_0 = optim.Adam(params=self.q_net_0.parameters(), lr=lr)
         self.optimizer_1 = optim.Adam(params=self.q_net_1.parameters(), lr=lr)
-        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=30, gamma=0.3)
-        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=30, gamma=0.3)
+        self.scheduler_0 = optim.lr_scheduler.StepLR(self.optimizer_0, step_size=50, gamma=0.3)
+        self.scheduler_1 = optim.lr_scheduler.StepLR(self.optimizer_1, step_size=50, gamma=0.3)
 
 
     @torch.no_grad()
@@ -98,8 +98,10 @@ class DDQN(nn.Module):
         beta = 0.3
         if 'antmaze' in diffusion_model_name or 'kitchen' in diffusion_model_name:
             update_steps = 3000
+        elif 'random_walk' in diffusion_model_name:
+            update_steps = 500
         else:
-            update_steps = 1500
+            update_steps = 2000
 
         for ep in tqdm(range(n_epochs), desc="Epoch"):
             n_batch = 0
@@ -278,7 +280,7 @@ class DDQN(nn.Module):
                     if steps_total%(3000) == 0:
                         torch.save(self,  'q_checkpoints_fixed/'+diffusion_model_name+'_dqn_agent_'+str(steps_total//5000)+'_cfg_weight_'+str(cfg_weight)+'{}.pt'.format('_PERbuffer' if per_buffer == 1 else ''))
 
-            beta = np.min((beta+0.03,1))
+            beta = np.min((beta+0.01,1))
             self.scheduler_0.step()
             self.scheduler_1.step()
             experiment.log_metric("train_loss_episode", loss_ep/n_batch, step=epoch)
