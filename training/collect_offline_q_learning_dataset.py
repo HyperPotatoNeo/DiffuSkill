@@ -162,7 +162,7 @@ if __name__ == '__main__':
     parser.add_argument('--extra_steps', type=int, default=5)
     parser.add_argument('--predict_noise', type=int, default=0)
 
-    parser.add_argument('--gamma', type=int, default=1.0)
+    parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--horizon', type=int, default=30)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--beta', type=float, default=1.0)
