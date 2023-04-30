@@ -53,6 +53,9 @@ def awr_policy(
         awr_model,
     ):
 
+    if append_goals:
+      state_0 = torch.cat([state_0, goal_state],dim=1)
+
     latent = awr_model(state_0)
     return latent
 
@@ -75,6 +78,9 @@ def q_policy(diffusion_model,
         dqn_agent,
         awr_model,
     ):
+
+    if append_goals:
+      state_0 = torch.cat([state_0, goal_state],dim=1)
 
     state_dim = state_0.shape[1]
     state = state_0.repeat_interleave(num_diffusion_samples, 0)
@@ -103,6 +109,60 @@ def q_policy(diffusion_model,
         p.join()
 
     return best_latent
+
+
+def diffusion_prior_policy(
+        diffusion_model,
+        skill_model,
+        state_0,
+        goal_state,
+        state_mean,
+        state_std,
+        latent_mean,
+        latent_std,
+        num_parallel_envs,
+        num_diffusion_samples,
+        extra_steps,
+        planning_depth,
+        predict_noise,
+        visualize,
+        append_goals,
+        dqn_agent,
+        awr_model,
+    ):
+
+    if append_goals:
+      state_0 = torch.cat([state_0, goal_state], dim=1)
+
+    latent = diffusion_model.sample_extra((state_0 - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
+    return latent
+
+
+def prior_policy(
+        diffusion_model,
+        skill_model,
+        state_0,
+        goal_state,
+        state_mean,
+        state_std,
+        latent_mean,
+        latent_std,
+        num_parallel_envs,
+        num_diffusion_samples,
+        extra_steps,
+        planning_depth,
+        predict_noise,
+        visualize,
+        append_goals,
+        dqn_agent,
+        awr_model,
+    ):
+
+    if append_goals:
+      state_0 = torch.cat([state_0, goal_state], dim=1)
+
+    latent, latent_prior_std = skill_model.prior(state_0)
+    return latent
 
 
 def greedy_policy(
@@ -304,7 +364,7 @@ def eval_func(diffusion_model,
                 for _ in range(exec_horizon):
                     for env_idx in range(len(envs)):
                         if not done[env_idx]:
-                            action = skill_model.decoder.ll_policy.numpy_policy(state_0[env_idx], best_latent[env_idx])
+                            action = skill_model.decoder.ll_policy.numpy_policy(torch.cat([state_0[env_idx], goal_state[env_idx]]) if append_goals else state_0[env_idx], best_latent[env_idx])
                             new_state, reward, done[env_idx], _ = envs[env_idx].step(action)
                             success_evals += reward
                             state_0[env_idx] = torch.from_numpy(new_state)
@@ -329,12 +389,10 @@ def eval_func(diffusion_model,
 
 
 def evaluate(args):
-    env = gym.make(args.env)
-    dataset = env.get_dataset()
-    state_dim = dataset['observations'].shape[1]
-    a_dim = dataset['actions'].shape[1]
+    state_dim = 29
+    a_dim = 8
 
-    skill_model = SkillModel(state_dim,
+    skill_model = SkillModel(state_dim + args.append_goals * 2,
                              a_dim,
                              args.z_dim,
                              args.h_dim,
@@ -351,23 +409,6 @@ def evaluate(args):
 
     skill_model.load_state_dict(torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename))['model_state_dict'])
     skill_model.eval()
-
-    if args.append_goals:
-      diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt')).to(args.device)
-    else:
-      diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
-
-    diffusion_model = Model_Cond_Diffusion(
-        diffusion_nn_model,
-        betas=(1e-4, 0.02),
-        n_T=args.diffusion_steps,
-        device=args.device,
-        x_dim=state_dim + args.append_goals*2,
-        y_dim=args.z_dim,
-        drop_prob=None,
-        guide_w=args.cfg_weight,
-    )
-    diffusion_model.eval()
 
     envs = [gym.make(args.env) for _ in range(args.num_parallel_envs)]
 
@@ -388,9 +429,30 @@ def evaluate(args):
       latent_mean = 0#torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
       latent_std = 1#torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
 
+    diffusion_model = None
     dqn_agent = None
     awr_model = None
-    if args.policy == 'greedy':
+
+    if args.policy == 'greedy' or args.policy == 'exhaustive' or args.policy == 'q' or args.policy == 'diffusion_prior':
+        diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
+
+        diffusion_model = Model_Cond_Diffusion(
+            diffusion_nn_model,
+            betas=(1e-4, 0.02),
+            n_T=args.diffusion_steps,
+            device=args.device,
+            x_dim=state_dim + args.append_goals*2,
+            y_dim=args.z_dim,
+            drop_prob=None,
+            guide_w=args.cfg_weight,
+        )
+        diffusion_model.eval()
+
+    if args.policy == 'prior':
+        policy_fn = prior_policy
+    elif args.policy == 'diffusion_prior':
+        policy_fn = diffusion_prior_policy
+    elif args.policy == 'greedy':
         policy_fn = greedy_policy
     elif args.policy == 'exhaustive':
         policy_fn = exhaustive_policy
