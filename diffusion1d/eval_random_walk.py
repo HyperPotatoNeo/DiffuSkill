@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 import os
-
+import pickle
 import numpy as np
 import torch
 import random
@@ -20,26 +20,7 @@ from models.diffusion_models import (
 from models.skill_model import SkillModel
 
 import multiprocessing as mp
-
-def awr_policy(diffusion_model,
-        skill_model,
-        state_0,
-        state_mean,
-        state_std,
-        latent_mean,
-        latent_std,
-        num_parallel_envs,
-        num_diffusion_samples,
-        extra_steps,
-        predict_noise,
-        append_goals,
-        dqn_agent,
-        awr_model
-    ):
-    
-    latent = awr_model(state_0)
-    return latent
-
+from diffusion1d.diffusion1D import RandomWalk, BehaviorPolicy
 
 def q_policy(diffusion_model,
         skill_model,
@@ -81,49 +62,6 @@ def q_policy(diffusion_model,
 
     return best_latent
 
-def diffusion_prior_policy(diffusion_model,
-        skill_model,
-        state_0,
-        state_mean,
-        state_std,
-        latent_mean,
-        latent_std,
-        num_parallel_envs,
-        num_diffusion_samples,
-        extra_steps,
-        predict_noise,
-        append_goals,
-        dqn_agent,
-        awr_model
-    ):
-
-    state_dim = state_0.shape[1]
-
-    latent = diffusion_model.sample_extra((state_0 - state_mean) / state_std, predict_noise=predict_noise, extra_steps=extra_steps) * latent_std + latent_mean
-    return latent
-
-
-def prior_policy(diffusion_model,
-        skill_model,
-        state_0,
-        state_mean,
-        state_std,
-        latent_mean,
-        latent_std,
-        num_parallel_envs,
-        num_diffusion_samples,
-        extra_steps,
-        predict_noise,
-        append_goals,
-        dqn_agent,
-        awr_model
-    ):
-
-    state_dim = state_0.shape[1]
-
-    latent, latent_prior_std = skill_model.prior(state_0)
-    return latent
-
 
 def eval_func(diffusion_model,
               skill_model,
@@ -164,7 +102,7 @@ def eval_func(diffusion_model,
             if 'kitchen' in env_name:
               total_steps = 280
             else:
-              total_steps = 1000
+              total_steps = 200
 
             while env_step < total_steps:
 
@@ -190,15 +128,12 @@ def eval_func(diffusion_model,
                         if not done[env_idx]:
                             action = skill_model.decoder.ll_policy.numpy_policy(state_0[env_idx], best_latent[env_idx])
                             new_state, reward, done[env_idx], _ = envs[env_idx].step(action)
+                            print(new_state)
                             scores += reward
 
                             state_0[env_idx] = torch.from_numpy(new_state)
 
-                            if render and env_idx == 0:
-                                envs[env_idx].render()
-
                     env_step += 1
-                    #print(env_step, scores)
                     if env_step > total_steps:
                         break
 
@@ -209,12 +144,13 @@ def eval_func(diffusion_model,
             if 'kitchen' in env_name:
               print(f'Total score: {scores / 4.0} out of {total_runs} i.e. {scores / total_runs * 25}%')
             else:
-              print(f'Total score: {scores} out of {total_runs}; Normalized Score: {envs[0].get_normalized_score(scores/total_runs)*100}')
+              print(f'Total score: {scores} out of {total_runs}; Avg Score: {scores/total_runs}')
 
 
 def evaluate(args):
-    env = gym.make(args.env)
-    dataset = env.get_dataset()
+    dataset_file = 'data/'+args.env+'.pkl'
+    with open(dataset_file, "rb") as f:
+        dataset = pickle.load(f)
     state_dim = dataset['observations'].shape[1]
     a_dim = dataset['actions'].shape[1]
 
@@ -256,7 +192,7 @@ def evaluate(args):
         )
         diffusion_model.eval()
 
-    envs = [gym.make(args.env) for _ in range(args.num_parallel_envs)]
+    envs = [RandomWalk() for _ in range(args.num_parallel_envs)]
 
     if not args.append_goals:
       #state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
@@ -282,10 +218,10 @@ def evaluate(args):
     elif args.policy == 'diffusion_prior':
         policy_fn = diffusion_prior_policy
     elif args.policy == 'q':
-      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(args.cfg_weight)+'_PERbuffer.pt')).to(args.device)
+      dqn_agent = torch.load(os.path.join(args.q_checkpoint_dir, args.skill_model_filename[:-4]+'_dqn_agent_'+str(args.q_checkpoint_steps)+'_cfg_weight_'+str(0.0)+'_PERbuffer.pt')).to(args.device)
       dqn_agent.diffusion_prior = diffusion_model
       dqn_agent.extra_steps = args.extra_steps
-      dqn_agent.target_net_0 = dqn_agent.q_net_0
+      #dqn_agent.target_net_0 = dqn_agent.q_net_0
       dqn_agent.eval()
       dqn_agent.num_prior_samples = args.num_diffusion_samples
       policy_fn = q_policy
@@ -323,12 +259,12 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
 
-    parser.add_argument('--env', type=str, default='kitchen-complete-v0')
+    parser.add_argument('--env', type=str, default='random_walk')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--num_evals', type=int, default=100)
     parser.add_argument('--num_parallel_envs', type=int, default=1)
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
-    parser.add_argument('--q_checkpoint_dir', type=str, default='q_checkpoints')
+    parser.add_argument('--q_checkpoint_dir', type=str, default='q_checkpoints_fixed')
     parser.add_argument('--q_checkpoint_steps', type=int, default=0)
     parser.add_argument('--awr_checkpoint_dir', type=str, default='awr_checkpoints/')
     parser.add_argument('--awr_checkpoint_steps', type=int, default=0)
@@ -342,9 +278,9 @@ if __name__ == "__main__":
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--extra_steps', type=int, default=4)
     parser.add_argument('--predict_noise', type=int, default=0)
-    parser.add_argument('--exec_horizon', type=int, default=30)
+    parser.add_argument('--exec_horizon', type=int, default=5)
 
-    parser.add_argument('--beta', type=float, default=1.0)
+    parser.add_argument('--beta', type=float, default=0.05)
     parser.add_argument('--a_dist', type=str, default='normal')
     parser.add_argument('--encoder_type', type=str, default='gru')
     parser.add_argument('--state_decoder_type', type=str, default='mlp')
@@ -352,8 +288,8 @@ if __name__ == "__main__":
     parser.add_argument('--per_element_sigma', type=int, default=1)
     parser.add_argument('--conditional_prior', type=int, default=1)
     parser.add_argument('--h_dim', type=int, default=256)
-    parser.add_argument('--z_dim', type=int, default=16)
-    parser.add_argument('--horizon', type=int, default=30)
+    parser.add_argument('--z_dim', type=int, default=8)
+    parser.add_argument('--horizon', type=int, default=10)
 
     parser.add_argument('--render', type=int, default=1)
 
