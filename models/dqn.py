@@ -11,7 +11,7 @@ import copy
 from tqdm import tqdm
 
 class DDQN(nn.Module):
-    def __init__(self, state_dim, z_dim, h_dim=256, gamma=0.995, tau=0.995, lr=1e-3, num_prior_samples=100, total_prior_samples=1000, extra_steps=10, device='cuda', diffusion_prior=None):
+    def __init__(self, state_dim, z_dim, h_dim=256, gamma=0.995, tau=0.995, lr=1e-3, num_prior_samples=100, total_prior_samples=1000, extra_steps=10, horizon=10,device='cuda', diffusion_prior=None):
         super(DDQN,self).__init__()
 
         self.state_dim = state_dim
@@ -24,6 +24,7 @@ class DDQN(nn.Module):
         self.device = device
         self.tau = tau
         self.diffusion_prior = diffusion_prior
+        self.horizon = horizon
 
         self.q_net_0 = MLP_Q(state_dim=state_dim,z_dim=z_dim,h_dim=h_dim).to(self.device)
         self.q_net_1 = MLP_Q(state_dim=state_dim,z_dim=z_dim,h_dim=h_dim).to(self.device)
@@ -135,7 +136,7 @@ class DDQN(nn.Module):
                     elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
                     else:
-                        q_target = (reward + self.gamma*(dones==0.0)*q_sTz).detach()
+                        q_target = (reward + (self.gamma**self.horizon)*(dones==0.0)*q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2)
                     prios = bellman_loss[...,0] + 5e-6
@@ -164,7 +165,7 @@ class DDQN(nn.Module):
                     elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
                     else:
-                        q_target = (reward + self.gamma*(dones==0.0)*q_sTz).detach()
+                        q_target = (reward + (self.gamma**self.horizon)*(dones==0.0)*q_sTz).detach()
 
                     bellman_loss  = (q_s0z - q_target).pow(2)
                     prios += bellman_loss[...,0] + 5e-6
