@@ -220,6 +220,74 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
                     rewards_test=rewards_test,
                     )
 
+    elif 'maze2d' in env_name:
+
+        obs = dataset['observations']
+        act = dataset['actions']
+
+        if get_rewards:
+            rew = np.expand_dims(dataset['rewards'], axis=1)
+
+        # reward = dataset['rewards'][start_idx : end_idx]
+        # goal = dataset['infos/goal'][start_idx : end_idx]
+
+        num_observations = obs.shape[0]
+
+        for chunk_idx in range(num_observations // stride - horizon):
+            chunk_start_idx = chunk_idx * stride
+            chunk_end_idx = chunk_start_idx + horizon
+
+            observations.append(torch.tensor(obs[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            actions.append(torch.tensor(act[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            if get_rewards:
+                rewards.append(torch.tensor(rew[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+            # goals.append(torch.tensor(goal[chunk_start_idx : chunk_end_idx], dtype=torch.float32))
+
+        observations = torch.stack(observations)
+        actions = torch.stack(actions)
+        if get_rewards:
+            rewards = torch.stack(rewards)
+        # goals = torch.stack(goals)
+
+        num_samples = observations.shape[0]
+
+        print('Total data samples extracted: ', num_samples)
+        num_test_samples = int(test_split * num_samples)
+
+        if separate_test_trajectories:
+            train_indices = np.arange(0, num_samples - num_test_samples)
+            test_indices = np.arange(num_samples - num_test_samples, num_samples)
+        else:
+            test_indices = np.random.choice(np.arange(num_samples), num_test_samples, replace=False)
+            train_indices = np.array(list(set(np.arange(num_samples)) - set(test_indices)))
+        np.random.shuffle(train_indices)
+
+        observations_train = observations[train_indices]
+        actions_train = actions[train_indices]
+        if get_rewards:
+            rewards_train = rewards[train_indices]
+        else:
+            rewards_train = None
+        # goals_train = goals[train_indices]
+
+        observations_test = observations[test_indices]
+        actions_test = actions[test_indices]
+        if get_rewards:
+            rewards_test = rewards[test_indices]
+        else:
+            rewards_test = None
+        # goals_test = goals[test_indices]
+
+        return dict(observations_train=observations_train,
+                    actions_train=actions_train,
+                    rewards_train=rewards_train,
+                    # goals_train=goals_train,
+                    observations_test=observations_test,
+                    actions_test=actions_test,
+                    rewards_test=rewards_test,
+                    # goals_test=goals_test,
+                    )
+
     else:
         obs = dataset['observations']
         act = dataset['actions']
