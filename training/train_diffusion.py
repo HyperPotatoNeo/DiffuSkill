@@ -180,7 +180,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_epoch', type=int, default=100)
     parser.add_argument('--lrate', type=float, default=1e-4)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--net_type', type=str, default='transformer')
+    parser.add_argument('--net_type', type=str, default='unet')
     parser.add_argument('--n_hidden', type=int, default=512)
     parser.add_argument('--test_split', type=float, default=0.2)
     parser.add_argument('--sample_z', type=int, default=0)
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument('--append_goals', type=int, default=0)
 
     parser.add_argument('--drop_prob', type=float, default=0.0)
-    parser.add_argument('--diffusion_steps', type=int, default=50)
+    parser.add_argument('--diffusion_steps', type=int, default=100)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
     parser.add_argument('--predict_noise', type=int, default=0)
     parser.add_argument('--normalize_latent', type=int, default=0)
