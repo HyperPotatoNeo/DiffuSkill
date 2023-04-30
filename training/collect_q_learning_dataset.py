@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--horizon', type=int, default=30)
     parser.add_argument('--stride', type=int, default=1)
-    parser.add_argument('--beta', type=float, default=1.0)
+    parser.add_argument('--beta', type=float, default=0.05)
     parser.add_argument('--a_dist', type=str, default='normal')
     parser.add_argument('--encoder_type', type=str, default='gru')
     parser.add_argument('--state_decoder_type', type=str, default='mlp')
