@@ -62,9 +62,9 @@ def test(model, test_state_decoder):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env_name', type=str, default='antmaze-large-diverse-v2')
-parser.add_argument('--beta', type=float, default=1.0)
+parser.add_argument('--beta', type=float, default=0.05)
 parser.add_argument('--conditional_prior', type=int, default=1)
-parser.add_argument('--z_dim', type=int, default=64)
+parser.add_argument('--z_dim', type=int, default=16)
 parser.add_argument('--lr', type=float, default=5e-5)
 parser.add_argument('--policy_decoder_type', type=str, default='autoregressive')
 parser.add_argument('--state_decoder_type', type=str, default='mlp')
@@ -76,6 +76,7 @@ parser.add_argument('--get_rewards', type=int, default=1)
 parser.add_argument('--num_epochs', type=int, default=50000)
 parser.add_argument('--start_training_state_decoder_after', type=int, default=0)
 parser.add_argument('--normalize_latent', type=int, default=0)
+parser.add_argument('--append_goals', type=int, default=0)
 args = parser.parse_args()
 
 batch_size = 128
@@ -113,13 +114,13 @@ actions = dataset['actions'] #[:10000]
 
 N = states.shape[0]
 
-state_dim = states.shape[1]
+state_dim = states.shape[1] + args.append_goals * 2
 a_dim = actions.shape[1]
 
 N_train = int((1-test_split)*N)
 N_test = N - N_train
 
-dataset = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories)
+dataset = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories, append_goals=args.append_goals)
 
 obs_chunks_train = dataset['observations_train']
 action_chunks_train = dataset['actions_train']
@@ -127,7 +128,7 @@ if test_split>0.0:
 	obs_chunks_test = dataset['observations_test']
 	action_chunks_test = dataset['actions_test']
 
-filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)
+filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)+'_appendgoals_'+str(args.append_goals)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
@@ -160,9 +161,10 @@ experiment.log_parameters({'lr':lr,
        						'conditional_prior': conditional_prior,
        						'train_diffusion_prior': train_diffusion_prior,
        						'test_split': test_split,
-                                                'separate_test_trajectories': args.separate_test_trajectories,
-                                                'get_rewards': args.get_rewards,
-                                                'normalize_latent': args.normalize_latent})
+                            'separate_test_trajectories': args.separate_test_trajectories,
+                            'get_rewards': args.get_rewards,
+                            'normalize_latent': args.normalize_latent,
+                            'append_goals': args.append_goals})
 
 inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
 if test_split>0.0:
