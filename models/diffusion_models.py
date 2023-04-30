@@ -416,7 +416,7 @@ def ddpm_schedules(beta1, beta2, T, schedule):
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
         betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
         betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
-        beta_t = torch.tensor(betas_clipped, dtype=torch.float32)
+        beta_t = torch.cat([torch.tensor([1.0]), torch.tensor(betas_clipped, dtype=torch.float32)])
     else:
         raise NotImplementedError
 
