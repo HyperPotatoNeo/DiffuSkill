@@ -20,19 +20,13 @@ from models.diffusion_models import (
 
 class PriorDataset(Dataset):
     def __init__(
-        self, dataset_dir, filename, train_or_test, test_prop, append_goals=False, sample_z=False
+        self, dataset_dir, filename, train_or_test, test_prop, sample_z=False
     ):
         # just load it all into RAM
-        if append_goals:
-            self.state_all = np.load(os.path.join(dataset_dir, filename + "_goals_states.npy"), allow_pickle=True)
-            self.latent_all = np.load(os.path.join(dataset_dir, filename + "_goals_latents.npy"), allow_pickle=True)
-            if sample_z:
-                self.latent_all_std = np.load(os.path.join(dataset_dir, filename + "_goals_latents_std.npy"), allow_pickle=True)
-        else:
-            self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
-            self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
-            if sample_z:
-                self.latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
+        self.state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
+        self.latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
+        if sample_z:
+            self.latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
 
         self.state_mean = self.state_all.mean(axis=0)
         self.state_std = self.state_all.std(axis=0)
@@ -73,7 +67,7 @@ class PriorDataset(Dataset):
 
 def train(args):
     if 'antmaze' in args.env:
-        state_dim = 29
+        state_dim = 29 + args.append_goals * 2
         a_dim = 8
     elif 'kitchen' in args.env:
         state_dim = 60
@@ -90,7 +84,7 @@ def train(args):
 
     # get datasets set up
     torch_data_train = PriorDataset(
-        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, append_goals=args.append_goals, sample_z=args.sample_z
+        args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, sample_z=args.sample_z
     )
     dataload_train = DataLoader(
         torch_data_train, batch_size=args.batch_size, shuffle=True, num_workers=0
@@ -98,7 +92,7 @@ def train(args):
 
     if args.test_split > 0.0:
         torch_data_test = PriorDataset(
-            args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split, append_goals=args.append_goals, sample_z=args.sample_z
+            args.dataset_dir, args.skill_model_filename[:-4], train_or_test="test", test_prop=args.test_split, sample_z=args.sample_z
         )
         dataload_test = DataLoader(
             torch_data_test, batch_size=args.batch_size, shuffle=True, num_workers=0
@@ -152,10 +146,7 @@ def train(args):
 
         # test loop
         if args.test_split > 0.0:
-            if args.append_goals:
-                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc.pt'))
-            else:
-                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
+            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
 
             model.eval()
             pbar = tqdm(dataload_test)
@@ -173,16 +164,10 @@ def train(args):
 
             if loss_ep < best_test_loss:
                 best_test_loss = loss_ep
-                if args.append_goals:
-                    torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt'))
-                else:
-                    torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
+                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
 
         else:
-            if args.append_goals:
-                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt'))
-            else:
-                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
+            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
 
 
 if __name__ == "__main__":
