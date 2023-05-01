@@ -396,7 +396,7 @@ class Model_mlp_diff_embed(nn.Module):
         return out
 
 
-def ddpm_schedules(beta1, beta2, T, is_linear=True):
+def ddpm_schedules(beta1, beta2, T, schedule):
     """
     Returns pre-computed schedules for DDPM sampling, training process.
     """
@@ -404,10 +404,22 @@ def ddpm_schedules(beta1, beta2, T, is_linear=True):
 
     # beta_t = (beta2 - beta1) * torch.arange(0, T + 1, dtype=torch.float32) / T + beta1
     # beta_t = (beta2 - beta1) * torch.arange(-1, T + 1, dtype=torch.float32) / T + beta1
-    if is_linear:
+    if schedule == 'linear':
         beta_t = (beta2 - beta1) * torch.arange(-1, T, dtype=torch.float32) / (T - 1) + beta1
-    else:
+    elif schedule == 'quadratic':
         beta_t = (beta2 - beta1) * torch.square(torch.arange(-1, T, dtype=torch.float32)) / torch.max(torch.square(torch.arange(-1, T, dtype=torch.float32))) + beta1
+    elif schedule == 'cosine':
+        s=0.008
+        steps = T + 1
+        x = np.linspace(-1, steps, steps)
+        alphas_cumprod = np.cos(((x / steps) + s) / (1 + s) * np.pi * 0.5) ** 2
+        alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+        betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+        betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
+        beta_t = torch.cat([torch.tensor([1.0]), torch.tensor(betas_clipped, dtype=torch.float32)])
+    else:
+        raise NotImplementedError
+
     beta_t[0] = beta1  # modifying this so that beta_t[1] = beta1, and beta_t[n_T]=beta2, while beta[0] is never used
     # this is as described in Denoising Diffusion Probabilistic Models paper, section 4
     sqrt_beta_t = torch.sqrt(beta_t)
@@ -433,9 +445,9 @@ def ddpm_schedules(beta1, beta2, T, is_linear=True):
 
 
 class Model_Cond_Diffusion(nn.Module):
-    def __init__(self, nn_model, betas, n_T, device, x_dim, y_dim, drop_prob=0.1, guide_w=0.0, normalize_latent=False):
+    def __init__(self, nn_model, betas, n_T, device, x_dim, y_dim, drop_prob=0.1, guide_w=0.0, normalize_latent=False, schedule='linear'):
         super(Model_Cond_Diffusion, self).__init__()
-        for k, v in ddpm_schedules(betas[0], betas[1], n_T).items():
+        for k, v in ddpm_schedules(betas[0], betas[1], n_T, schedule).items():
             self.register_buffer(k, v)
 
         self.nn_model = nn_model

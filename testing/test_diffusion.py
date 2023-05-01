@@ -60,62 +60,56 @@ def test_diffusion(args):
         )
         diffusion_model.eval()
 
-        state_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_states.npy"), allow_pickle=True)
-        state_mean = torch.from_numpy(state_all.mean(axis=0)).to(args.device).float()
-        state_std = torch.from_numpy(state_all.std(axis=0)).to(args.device).float()
-
-        latent_all = np.load(os.path.join(args.dataset_dir, args.skill_model_filename[:-4] + "_latents.npy"), allow_pickle=True)
-        latent_mean = torch.from_numpy(latent_all.mean(axis=0)).to(args.device).float()
-        latent_std = torch.from_numpy(latent_all.std(axis=0)).to(args.device).float()
-
+    plt.imshow(ANTMAZE, extent=[-6, 42, -6, 30])
 
     for idx, (observation, action) in enumerate(zip(dataset['observations_train'], dataset['actions_train'])):
-
+        print(idx)
         observation = observation.to(args.device).unsqueeze(0)
         action = action.to(args.device).unsqueeze(0)
 
         with torch.no_grad():
-            reconstructed_observation, _, _, _, _, _ = skill_model(observation.repeat_interleave(10, 0), action.repeat_interleave(10, 0), True)
+            reconstructed_observation, _, _, _, _, _, _ = skill_model(observation.repeat_interleave(10, 0), action.repeat_interleave(10, 0), True)
 
             if args.conditional_prior:
                 latent_prior_mean, latent_prior_std = skill_model.prior(observation[:, 0:1])
-                latent_prior = torch.distributions.Normal(latent_prior_mean[0], latent_prior_std[0]).sample(torch.tensor([10]))
+                latent_prior = latent_prior_mean
             else:
                 latent_prior = torch.distributions.Normal(torch.zeros((1, 1, args.z_dim)), torch.ones((1, 1, args.z_dim))).sample().to(args.device)
 
             if args.state_decoder_type == 'autoregressive':
-                reconstructed_observation_prior, _ = skill_model.decoder.abstract_dynamics(observation[:, 0:1].repeat_interleave(10, 0), None, latent_prior, evaluation=True)
-                reconstructed_observation_prior = reconstructed_observation_prior.squeeze(1)
+                reconstructed_observation_prior, _ = skill_model.decoder.abstract_dynamics(observation[:, 0:1].repeat_interleave(10, 0), None, latent_prior.repeat_interleave(10, 0), evaluation=True)
             else:
                 reconstructed_observation_prior, _ = skill_model.decoder.abstract_dynamics(observation[:, 0:1], latent_prior)
+            reconstructed_observation_prior = reconstructed_observation_prior.squeeze(1)
 
             if args.viz_diffusion:
                 state = observation[0, 0:1].repeat_interleave(args.num_diffusion_samples, 0)
-                latent = diffusion_model.sample_extra((state - state_mean) / state_std, predict_noise=args.predict_noise, extra_steps=args.extra_steps) * latent_std + latent_mean
+                latent = diffusion_model.sample_extra(state, predict_noise=args.predict_noise, extra_steps=args.extra_steps)
 
                 if args.state_decoder_type == 'autoregressive':
-                    state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
+                    state, sigma = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), None, latent.unsqueeze(1), evaluation=True)
                     state = state.squeeze(1)
                 else:
-                    state, _ = skill_model.decoder.abstract_dynamics(state, latent)
+                    state, _ = skill_model.decoder.abstract_dynamics(state.unsqueeze(1), latent.unsqueeze(1))
+                    state = state.squeeze(1)
 
 
-        plt.imshow(ANTMAZE, extent=[-6, 42, -6, 30])
 
         if args.viz_diffusion:
             plt.scatter(state[:, 0].cpu().numpy(), state[:, 1].cpu().numpy(), color='blue', label='diffusion dist')
 
-        plt.scatter(observation[0, 0, 0].cpu().numpy(), observation[0, 0, 1].cpu().numpy(), color='green', label='current state')
+        # plt.scatter(observation[0, 0, 0].cpu().numpy(), observation[0, 0, 1].cpu().numpy(), color='green', label='current state')
         plt.scatter(reconstructed_observation[:, 0, 0].cpu().numpy(), reconstructed_observation[:, 0, 1].cpu().numpy(), color='yellow', label='vae dist')
         plt.scatter(reconstructed_observation_prior[:, 0].cpu().numpy(), reconstructed_observation_prior[:, 1].cpu().numpy(), color='red', label='prior dist')
 
         related_states = torch.linalg.norm(dataset['observations_train'][:, 0] - observation[:, 0].cpu(), axis=-1) < 3
 
         plt.scatter(dataset['observations_train'][related_states, -1, 0], dataset['observations_train'][related_states, -1, 1], color='pink', label='ground truth dist')
-        plt.legend()
-        mng = plt.get_current_fig_manager()
-        mng.resize(*mng.window.maxsize())
-        plt.show()
+
+    plt.legend()
+    mng = plt.get_current_fig_manager()
+    mng.resize(*mng.window.maxsize())
+    plt.show()
 
 
 if __name__ == '__main__':
