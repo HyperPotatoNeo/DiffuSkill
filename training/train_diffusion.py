@@ -178,7 +178,7 @@ def train(args):
                 else:
                     torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
 
-        else:
+        elif ep%75==0:
             if args.append_goals:
                 torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt'))
             else:
