@@ -63,7 +63,7 @@ def collect_data(args):
     obs_chunks_train = dataset['observations_train']
     action_chunks_train = dataset['actions_train']
     rewards_chunks_train = dataset['rewards_train']
-    if not 'antmaze' in args.env and not 'kitchen' in args.env:
+    if not 'maze' in args.env and not 'kitchen' in args.env:
         terminals_chunks_train = dataset['terminals_train']
         inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train, terminals_chunks_train], dim=-1)
     else:
@@ -81,7 +81,7 @@ def collect_data(args):
     sT_gt = np.zeros((inputs_train.shape[0], state_dim))
     rewards_gt = np.zeros((inputs_train.shape[0], 1))
     diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
-    if not 'antmaze' in args.env and not 'kitchen' in args.env:
+    if not 'maze' in args.env and not 'kitchen' in args.env:
         terminals_gt = np.zeros((inputs_train.shape[0], 1))
     #prior_latents_gt = np.zeros((inputs_train.shape[0], args.num_prior_samples, args.z_dim))
     gamma_array = np.power(args.gamma, np.arange(args.horizon))
@@ -90,7 +90,7 @@ def collect_data(args):
         data = data.to(args.device)
         states = data[:, :, :skill_model.state_dim]
         actions = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim]
-        if not 'antmaze' in args.env and not 'kitchen' in args.env:
+        if not 'maze' in args.env and not 'kitchen' in args.env:
             rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:skill_model.state_dim+2*args.append_goals+a_dim+1]
             terminals = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim+1:]
         else:
@@ -101,7 +101,7 @@ def collect_data(args):
         states_gt[start_idx : end_idx] = data[:, 0, :skill_model.state_dim+2*args.append_goals].cpu().numpy()
         sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
         rewards_gt[start_idx: end_idx, 0] = np.sum(rewards.cpu().numpy()[:,:,0]*gamma_array, axis=1)
-        if not 'antmaze' in args.env and not 'kitchen' in args.env:
+        if not 'maze' in args.env and not 'kitchen' in args.env:
             terminals_gt[start_idx: end_idx] = np.sum(terminals.cpu().numpy(), axis=1)
         '''
         with torch.no_grad():
@@ -129,7 +129,7 @@ def collect_data(args):
         #np.save('data/' + args.skill_model_filename[:-4] + '_prior_latents.npy', prior_latents_gt)
         if args.save_z_dist:
             np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
-        if not 'antmaze' in args.env and not 'kitchen' in args.env:
+        if not 'maze' in args.env and not 'kitchen' in args.env:
             np.save('data/' + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
     else:
         np.save('data/' + args.skill_model_filename[:-4] + '_goals_states.npy', states_gt)
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--skill_model_filename', type=str)
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--append_goals', type=int, default=0)
     parser.add_argument('--save_z_dist', type=int, default=1)
     parser.add_argument('--cum_rewards', type=int, default=0)
