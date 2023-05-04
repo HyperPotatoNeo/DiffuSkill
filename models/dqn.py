@@ -97,7 +97,7 @@ class DDQN(nn.Module):
         loss_net_0, loss_net_1, loss_total = 0, 0, 0 #Logged in comet at update frequency
         epoch = 0
         beta = 0.3
-        if 'antmaze' in diffusion_model_name or 'kitchen' in diffusion_model_name:
+        if 'maze' in diffusion_model_name or 'kitchen' in diffusion_model_name:
             update_steps = 3000
         elif 'random_walk' in diffusion_model_name:
             update_steps = 500
@@ -131,7 +131,7 @@ class DDQN(nn.Module):
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
 
-                    if 'antmaze' in diffusion_model_name:
+                    if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
                     elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
@@ -160,7 +160,7 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    if 'antmaze' in diffusion_model_name:
+                    if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
                     elif 'kitchen' in diffusion_model_name:
                         q_target = (reward + self.gamma * q_sTz).detach()
@@ -221,7 +221,7 @@ class DDQN(nn.Module):
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
 
-                    if 'antmaze' in diffusion_model_name:
+                    if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
                     else:
                         q_target = (reward + self.gamma * q_sTz).detach()
@@ -243,7 +243,7 @@ class DDQN(nn.Module):
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
                     q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
                                         self.target_net_1(sT,max_sT_skills.detach()),)
-                    if 'antmaze' in diffusion_model_name:
+                    if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
                     else:
                         q_target = (reward + self.gamma * q_sTz).detach()
