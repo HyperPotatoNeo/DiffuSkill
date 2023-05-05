@@ -58,7 +58,7 @@ class QLearningDataset(Dataset):
 
         return (state, latent, sT, reward)
 
-def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, sample_max_latents=False):
+def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, sample_max_latents=False, alpha=0.6):
     # just load it all into RAM
     state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
     latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
@@ -87,7 +87,7 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
         max_latents_all = None
     
     # load into PER buffer
-    replay_buffer = NaivePrioritizedBuffer(n_train)
+    replay_buffer = NaivePrioritizedBuffer(n_train, prob_alpha=alpha)
     for i in tqdm(range(n_train)):
         if not 'maze' in filename and not 'kitchen' in filename:
             replay_buffer.push(state_all[i], latent_all[i], rewards_all[i], sT_all[i], terminals_all[i], max_latents_all[i])
@@ -97,15 +97,9 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
     return replay_buffer, state_all.shape[-1], latent_all.shape[-1]
 
 def train(args):
-    dataset_file = 'data/'+args.env+'.pkl'
-    with open(dataset_file, "rb") as f:
-        dataset = pickle.load(f)
-    state_dim = dataset['observations'].shape[1]
-    a_dim = dataset['actions'].shape[1]
-
     # get datasets set up
     if args.per_buffer:
-        per_buffer, x_shape, y_dim = PER_buffer_filler(args.dataset_dir, args.skill_model_filename[:-4], test_prop=args.test_split, sample_z=args.sample_z, sample_max_latents=args.sample_max_latents)
+        per_buffer, x_shape, y_dim = PER_buffer_filler(args.dataset_dir, args.skill_model_filename[:-4], test_prop=args.test_split, sample_z=args.sample_z, sample_max_latents=args.sample_max_latents, alpha=args.alpha)
     else:
         torch_data_train = QLearningDataset(
             args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, sample_z=args.sample_z
@@ -160,6 +154,7 @@ if __name__ == "__main__":
     parser.add_argument('--sample_max_latents', type=int, default=1)
     parser.add_argument('--total_prior_samples', type=int, default=1000)
     parser.add_argument('--gamma', type=float, default=0.995)
+    parser.add_argument('--alpha', type=float, default=0.6)
 
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/')
     parser.add_argument('--dataset_dir', type=str, default='data/')
