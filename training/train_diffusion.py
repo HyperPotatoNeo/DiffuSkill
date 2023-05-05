@@ -66,13 +66,6 @@ class PriorDataset(Dataset):
 
 
 def train(args):
-    if 'antmaze' in args.env:
-        state_dim = 29 + args.append_goals * 2
-        a_dim = 8
-    elif 'kitchen' in args.env:
-        state_dim = 60
-        a_dim = 9
-
     experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
     experiment.log_parameters({'lrate':args.lrate,
                             'batch_size':args.batch_size,
@@ -169,10 +162,7 @@ def train(args):
                 torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
 
         elif ep%75==0:
-            if args.append_goals:
-                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_gc_best.pt'))
-            else:
-                torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
+            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt'))
 
 
 if __name__ == "__main__":
