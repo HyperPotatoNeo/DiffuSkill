@@ -222,6 +222,9 @@ def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, g
 
     elif 'maze2d' in env_name:
 
+        if append_goals:
+            dataset['observations'] = np.hstack([dataset['observations'], dataset['infos/goal']])
+
         obs = dataset['observations']
         act = dataset['actions']
 
