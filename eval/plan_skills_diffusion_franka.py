@@ -286,6 +286,7 @@ def evaluate(args):
       dqn_agent.diffusion_prior = diffusion_model
       dqn_agent.extra_steps = args.extra_steps
       dqn_agent.target_net_0 = dqn_agent.q_net_0
+      dqn_agent.target_net_1 = dqn_agent.q_net_1
       dqn_agent.eval()
       dqn_agent.num_prior_samples = args.num_diffusion_samples
       policy_fn = q_policy

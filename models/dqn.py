@@ -69,10 +69,15 @@ class DDQN(nn.Module):
 
         else:
             z_samples = self.diffusion_prior.sample_extra(states, predict_noise=0, extra_steps=self.extra_steps)
-        if net==0:
-            q_vals = self.target_net_0(states,z_samples)[:,0]#self.q_net_0(states,z_samples)[:,0]
+
+        if is_eval:
+            q_vals = torch.minimum(self.target_net_0(states, z_samples)[:, 0], self.target_net_1(states, z_samples)[:, 0])
         else:
-            q_vals = self.target_net_1(states,z_samples)[:,0]#self.q_net_1(states,z_samples)[:,0]
+            if net==0:
+                q_vals = self.target_net_0(states,z_samples)[:,0]#self.q_net_0(states,z_samples)[:,0]
+            else:
+                q_vals = self.target_net_1(states,z_samples)[:,0]#self.q_net_1(states,z_samples)[:,0]
+
         if is_eval:
             return z_samples, q_vals
         q_vals = q_vals.reshape(n_states, self.num_prior_samples)
@@ -128,8 +133,9 @@ class DDQN(nn.Module):
 
                     q_s0z = self.q_net_0(s0,z)
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id,sample_latents=max_latents)
-                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                        self.target_net_1(sT,max_sT_skills.detach()),)
+
+                    with torch.no_grad():
+                        q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()), self.target_net_1(sT,max_sT_skills.detach()),)
 
                     if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
@@ -158,8 +164,9 @@ class DDQN(nn.Module):
 
                     q_s0z = self.q_net_1(s0,z)
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                        self.target_net_1(sT,max_sT_skills.detach()),)
+
+                    with torch.no_grad():
+                        q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()), self.target_net_1(sT,max_sT_skills.detach()),)
                     if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==0.0)*q_sTz).detach()
                     elif 'kitchen' in diffusion_model_name:
@@ -218,8 +225,9 @@ class DDQN(nn.Module):
 
                     q_s0z = self.q_net_0(s0,z)
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                        self.target_net_1(sT,max_sT_skills.detach()),)
+
+                    with torch.no_grad():
+                        q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()), self.target_net_1(sT,max_sT_skills.detach()),)
 
                     if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
@@ -241,8 +249,9 @@ class DDQN(nn.Module):
 
                     q_s0z = self.q_net_1(s0,z)
                     max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
-                    q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()),
-                                        self.target_net_1(sT,max_sT_skills.detach()),)
+
+                    with torch.no_grad():
+                        q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()), self.target_net_1(sT,max_sT_skills.detach()),)
                     if 'maze' in diffusion_model_name:
                         q_target = (reward + self.gamma*(reward==-6.0)*q_sTz).detach()
                     else:
