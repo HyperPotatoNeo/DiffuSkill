@@ -139,10 +139,10 @@ def train(args):
             optim.step()
         experiment.log_metric("train_loss", loss_ep/n_batch, step=ep)
 
+        torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
+
         # test loop
         if args.test_split > 0.0:
-            torch.save(nn_model, os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt'))
-
             model.eval()
             pbar = tqdm(dataload_test)
             loss_ep, n_batch = 0, 0
