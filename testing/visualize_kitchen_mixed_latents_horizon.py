@@ -94,14 +94,46 @@ def visualize_kitchen_mixed_latents(args):
     colors = ['#4285F4', '#DB4437', '#F4B400',] #Blue, Red, Yellow
     labels = ['Kettle', 'Microwave', 'Burner',]
 
-    plt.gca().set_aspect('equal')
-    plt.scatter(gt_umap_2d[:, 0], gt_umap_2d[:, 1], c=[colors[label] for label in tasks])
-    plt.xlim([-0.5, 0.7])
-    plt.ylim([-0.4, 0.7])
-    handles = [plt.Rectangle((0,0), 1, 1, color=color) for color in colors]
-    plt.legend(handles, labels)
-    plt.show()
+    fig, ax = plt.subplots()
 
+    # Set the background color to gray
+    ax.set_facecolor('#EDEDED')
+
+    # Customize grid lines to create a brick-like pattern
+    ax.xaxis.set_major_locator(plt.MultipleLocator(0.4))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(0.2))
+    ax.grid(which='major', linestyle='-', linewidth='1.5', color='white')
+    ax.grid(which='minor', linestyle='-', linewidth='0.5', color='white')
+
+    # plt.gca().set_aspect('equal')
+
+    # Scatter plot
+    ax.scatter(gt_umap_2d[:, 0], gt_umap_2d[:, 1], c=[colors[label] for label in tasks], zorder=2, alpha=0.6, s=50)
+
+    # Set the x and y axis limits
+    ax.set_xlim([-0.5, 1.0])
+    ax.set_ylim([-0.4, 0.7])
+
+    # Remove axis labels
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+
+    # Remove border
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.tick_params(axis='both', which='both', length=0)
+
+    # Legend
+    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
+    ax.legend(handles, labels, fontsize=15)
+
+    # Show the plot
+    plt.show()
 
 if __name__ == '__main__':
 
