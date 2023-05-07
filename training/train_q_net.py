@@ -134,6 +134,7 @@ def train(args):
     model.eval()
 
     dqn_agent = DDQN(state_dim = x_shape, z_dim=y_dim, diffusion_prior=model, total_prior_samples=args.total_prior_samples, gamma=args.gamma)
+    dqn_agent = torch.load('q_checkpoints_fixed/skill_model_maze2d-large-v1_encoderType(gru)_state_dec_mlp_policy_dec_autoregressive_H_10_b_0.05_conditionalp_1_zdim_16_adist_normal_testSplit_0.0_separatetest_0_getrewards_1_50__dqn_agent_24_cfg_weight_0.0_PERbuffer.pt').to(args.device)
     dqn_agent.learn(dataload_train=per_buffer if args.per_buffer else dataload_train,
         diffusion_model_name=args.skill_model_filename[:-4], cfg_weight=args.cfg_weight, per_buffer = args.per_buffer, batch_size = args.batch_size)
 
