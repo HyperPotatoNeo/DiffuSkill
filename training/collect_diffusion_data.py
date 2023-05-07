@@ -16,6 +16,9 @@ def collect_data(args):
     elif 'kitchen' in args.env:
         state_dim = 60
         a_dim = 9
+    elif 'maze' in args.env:
+        state_dim = 4 + args.append_goals * 2
+        a_dim = 2
     else:
         raise NotImplementedError
 
