@@ -455,7 +455,7 @@ def evaluate(args):
     awr_model = None
 
     if args.policy == 'greedy' or args.policy == 'exhaustive' or args.policy == 'q' or args.policy == 'diffusion_prior':
-        diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior.pt')).to(args.device)
+        diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
 
         diffusion_model = Model_Cond_Diffusion(
             diffusion_nn_model,
