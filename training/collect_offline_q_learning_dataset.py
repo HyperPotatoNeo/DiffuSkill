@@ -44,19 +44,20 @@ def collect_data(args):
     skill_model.load_state_dict(checkpoint['model_state_dict'])
     skill_model.eval()
 
-    diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
+    if args.do_diffusion:
+        diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
 
-    diffusion_model = Model_Cond_Diffusion(
-        diffusion_nn_model,
-        betas=(1e-4, 0.02),
-        n_T=args.diffusion_steps,
-        device=args.device,
-        x_dim=state_dim,
-        y_dim=args.z_dim,
-        drop_prob=None,
-        guide_w=args.cfg_weight,
-    )
-    diffusion_model.eval()
+        diffusion_model = Model_Cond_Diffusion(
+            diffusion_nn_model,
+            betas=(1e-4, 0.02),
+            n_T=args.diffusion_steps,
+            device=args.device,
+            x_dim=state_dim,
+            y_dim=args.z_dim,
+            drop_prob=None,
+            guide_w=args.cfg_weight,
+        )
+        diffusion_model.eval()
 
     dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals, get_rewards=True, cum_rewards=args.cum_rewards)
 
