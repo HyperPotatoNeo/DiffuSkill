@@ -163,7 +163,7 @@ class DDQN(nn.Module):
                     self.optimizer_1.zero_grad()
 
                     q_s0z = self.q_net_1(s0,z)
-                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id)
+                    max_sT_skills,_ = self.get_max_skills(sT,net=1-net_id, sample_latents=max_latents)
 
                     with torch.no_grad():
                         q_sTz = torch.minimum(self.target_net_0(sT,max_sT_skills.detach()), self.target_net_1(sT,max_sT_skills.detach()),)
