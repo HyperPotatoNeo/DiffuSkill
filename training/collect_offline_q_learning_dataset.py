@@ -80,10 +80,14 @@ def collect_data(args):
         latent_std_gt = np.zeros((inputs_train.shape[0], args.z_dim))
     sT_gt = np.zeros((inputs_train.shape[0], state_dim))
     rewards_gt = np.zeros((inputs_train.shape[0], 1))
-    diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
+
+    if args.do_diffusion:
+        diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
+    else:
+        prior_latents_gt = np.zeros((inputs_train.shape[0], args.num_prior_samples, args.z_dim))
+
     if not 'maze' in args.env and not 'kitchen' in args.env:
         terminals_gt = np.zeros((inputs_train.shape[0], 1))
-    #prior_latents_gt = np.zeros((inputs_train.shape[0], args.num_prior_samples, args.z_dim))
     gamma_array = np.power(args.gamma, np.arange(args.horizon))
 
     for batch_id, data in enumerate(tqdm(train_loader)):
@@ -103,43 +107,36 @@ def collect_data(args):
         rewards_gt[start_idx: end_idx, 0] = np.sum(rewards.cpu().numpy()[:,:,0]*gamma_array, axis=1)
         if not 'maze' in args.env and not 'kitchen' in args.env:
             terminals_gt[start_idx: end_idx] = np.sum(terminals.cpu().numpy(), axis=1)
-        '''
-        with torch.no_grad():
-            prior_latent_mean, prior_latent_std = skill_model.prior(states[:, -1, :skill_model.state_dim])
-            prior_latent_mean = prior_latent_mean.repeat_interleave(args.num_prior_samples, 0)
-            prior_latent_std = prior_latent_std.repeat_interleave(args.num_prior_samples, 0)
 
-            prior_latents_gt[start_idx : end_idx] = torch.stack(torch.distributions.normal.Normal(prior_latent_mean, prior_latent_std).sample().chunk(data.shape[0])).cpu().numpy()
-        '''
-        diffusion_state = states[:, -1, :skill_model.state_dim].repeat_interleave(args.num_diffusion_samples, 0)
-        with torch.no_grad():
-            diffusion_latents_gt[start_idx : end_idx] = torch.stack(diffusion_model.sample_extra(diffusion_state, predict_noise=args.predict_noise, extra_steps=args.extra_steps).chunk(data.shape[0])).cpu().numpy()
+        if not args.do_diffusion:
+            with torch.no_grad():
+                prior_latent_mean, prior_latent_std = skill_model.prior(states[:, -1, :skill_model.state_dim])
+                prior_latent_mean = prior_latent_mean.repeat_interleave(args.num_prior_samples, 0)
+                prior_latent_std = prior_latent_std.repeat_interleave(args.num_prior_samples, 0)
+
+                prior_latents_gt[start_idx : end_idx] = torch.stack(torch.distributions.normal.Normal(prior_latent_mean, prior_latent_std).sample().chunk(data.shape[0])).cpu().numpy()
+        else:
+            diffusion_state = states[:, -1, :skill_model.state_dim].repeat_interleave(args.num_diffusion_samples, 0)
+            with torch.no_grad():
+                diffusion_latents_gt[start_idx : end_idx] = torch.stack(diffusion_model.sample_extra(diffusion_state, predict_noise=args.predict_noise, extra_steps=args.extra_steps).chunk(data.shape[0])).cpu().numpy()
 
         output, output_std = skill_model.encoder(states, actions)
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
         if args.save_z_dist:
             latent_std_gt[start_idx : end_idx] = output_std.detach().cpu().numpy().squeeze(1)
 
-    if not args.append_goals:
-        np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
+    np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
+    np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
+    np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
+    np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
+    if args.do_diffusion:
         np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
-        #np.save('data/' + args.skill_model_filename[:-4] + '_prior_latents.npy', prior_latents_gt)
-        if args.save_z_dist:
-            np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
-        if not 'maze' in args.env and not 'kitchen' in args.env:
-            np.save('data/' + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
     else:
-        np.save('data/' + args.skill_model_filename[:-4] + '_goals_states.npy', states_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents.npy', latent_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sT.npy', sT_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_goals_rewards.npy', rewards_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sample_latents.npy', diffusion_latents_gt)
-        np.save('data/' + args.skill_model_filename[:-4] + '_goals_sample_latents.npy', prior_latents_gt)
-        if args.save_z_dist:
-            np.save('data/' + args.skill_model_filename[:-4] + '_goals_latents_std.npy', latent_std_gt)
+        np.save('data/' + args.skill_model_filename[:-4] + '_prior_latents.npy', prior_latents_gt)
+    if args.save_z_dist:
+        np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
+    if not 'maze' in args.env and not 'kitchen' in args.env:
+        np.save('data/' + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
 
 
 if __name__ == '__main__':
@@ -155,6 +152,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_z_dist', type=int, default=1)
     parser.add_argument('--cum_rewards', type=int, default=0)
 
+    parser.add_argument('--do_diffusion', type=int, default=1)
     parser.add_argument('--num_diffusion_samples', type=int, default=1000)
     parser.add_argument('--num_prior_samples', type=int, default=1000)
     parser.add_argument('--diffusion_steps', type=int, default=100)
