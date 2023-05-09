@@ -58,7 +58,7 @@ class QLearningDataset(Dataset):
 
         return (state, latent, sT, reward)
 
-def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, sample_max_latents=False, alpha=0.6):
+def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, sample_max_latents=False, alpha=0.6, do_diffusion=1):
     # just load it all into RAM
     state_all = np.load(os.path.join(dataset_dir, filename + "_states.npy"), allow_pickle=True)
     latent_all = np.load(os.path.join(dataset_dir, filename + "_latents.npy"), allow_pickle=True)
@@ -67,7 +67,10 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
     if sample_z:
         latent_all_std = np.load(os.path.join(dataset_dir, filename + "_latents_std.npy"), allow_pickle=True)
     if sample_max_latents:
-        max_latents = np.load(os.path.join(dataset_dir, filename + "_sample_latents.npy"), allow_pickle=True)
+        if do_diffusion:
+            max_latents = np.load(os.path.join(dataset_dir, filename + "_sample_latents.npy"), allow_pickle=True)
+        else:
+            max_latents = np.load(os.path.join(dataset_dir, filename + "_prior_latents.npy"), allow_pickle=True)
     if not 'maze' in filename and not 'kitchen' in filename:
         terminals_all = np.load(os.path.join(dataset_dir, filename + "_terminals.npy"), allow_pickle=True)
         rewards_all = rewards_all/10
@@ -99,7 +102,7 @@ def PER_buffer_filler(dataset_dir, filename, test_prop=0.1, sample_z=False, samp
 def train(args):
     # get datasets set up
     if args.per_buffer:
-        per_buffer, x_shape, y_dim = PER_buffer_filler(args.dataset_dir, args.skill_model_filename[:-4], test_prop=args.test_split, sample_z=args.sample_z, sample_max_latents=args.sample_max_latents, alpha=args.alpha)
+        per_buffer, x_shape, y_dim = PER_buffer_filler(args.dataset_dir, args.skill_model_filename[:-4], test_prop=args.test_split, sample_z=args.sample_z, sample_max_latents=args.sample_max_latents, alpha=args.alpha, do_diffusion=args.do_diffusion)
     else:
         torch_data_train = QLearningDataset(
             args.dataset_dir, args.skill_model_filename[:-4], train_or_test="train", test_prop=args.test_split, sample_z=args.sample_z
