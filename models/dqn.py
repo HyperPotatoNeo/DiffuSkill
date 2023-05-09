@@ -91,7 +91,7 @@ class DDQN(nn.Module):
 
 
     def learn(self, dataload_train, dataload_test=None, n_epochs=10000, update_frequency=1, diffusion_model_name='', cfg_weight=0.0, per_buffer = 0.0, batch_size = 128):
-        assert self.diffusion_prior is not None
+        # assert self.diffusion_prior is not None
         experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
         experiment.log_parameters({'diffusion_prior':diffusion_model_name, 'cfg_weight':cfg_weight, 'per_buffer': per_buffer})
         steps_net_0, steps_net_1, steps_total = 0, 0, 0

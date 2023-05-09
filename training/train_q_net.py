@@ -120,18 +120,20 @@ def train(args):
     )
     '''
     # create model
-    diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
-    model = Model_Cond_Diffusion(
-        diffusion_nn_model,
-        betas=(1e-4, 0.02),
-        n_T=args.diffusion_steps,
-        device=args.device,
-        x_dim=x_shape,
-        y_dim=y_dim,
-        drop_prob=args.drop_prob,
-        guide_w=args.cfg_weight,
-    ).to(args.device)
-    model.eval()
+    model = None
+    if args.do_diffusion:
+        diffusion_nn_model = torch.load(os.path.join(args.checkpoint_dir, args.skill_model_filename[:-4] + '_diffusion_prior_best.pt')).to(args.device)
+        model = Model_Cond_Diffusion(
+            diffusion_nn_model,
+            betas=(1e-4, 0.02),
+            n_T=args.diffusion_steps,
+            device=args.device,
+            x_dim=x_shape,
+            y_dim=y_dim,
+            drop_prob=args.drop_prob,
+            guide_w=args.cfg_weight,
+        ).to(args.device)
+        model.eval()
 
     dqn_agent = DDQN(state_dim = x_shape, z_dim=y_dim, diffusion_prior=model, total_prior_samples=args.total_prior_samples, gamma=args.gamma)
     dqn_agent.learn(dataload_train=per_buffer if args.per_buffer else dataload_train,
@@ -160,6 +162,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_dir', type=str, default='data/')
     parser.add_argument('--skill_model_filename', type=str)
 
+    parser.add_argument('--do_diffusion', type=int, default=1)
     parser.add_argument('--drop_prob', type=float, default=0.0)
     parser.add_argument('--diffusion_steps', type=int, default=100)
     parser.add_argument('--cfg_weight', type=float, default=0.0)
