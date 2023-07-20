@@ -598,16 +598,16 @@ class SkillModel(nn.Module):
         self.env_name = env_name
 
         if 'atari' in env_name:
-            self.image_encoder = ImageStateEncoder(horizon, state_dim=state_dim)
+            self.image_encoder = ImageStateEncoder(horizon, state_dim=state_dim).cuda()
         
         if encoder_type == 'gru':
-            self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim,normalize_latent=normalize_latent)
+            self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim,normalize_latent=normalize_latent).cuda()
         elif encoder_type == 'transformer':
             self.encoder = TransformEncoder(state_dim,a_dim,z_dim,h_dim,horizon)
 
-        self.decoder = Decoder(state_dim,a_dim,z_dim,h_dim, a_dist, fixed_sig=fixed_sig,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma)
+        self.decoder = Decoder(state_dim,a_dim,z_dim,h_dim, a_dist, fixed_sig=fixed_sig,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma).cuda()
         if conditional_prior:
-            self.prior   = Prior(state_dim,z_dim,h_dim)
+            self.prior   = Prior(state_dim,z_dim,h_dim).cuda()
             self.gen_model = GenerativeModel(self.decoder,self.prior)
         if self.train_diffusion_prior:
             nn_model = Model_mlp(

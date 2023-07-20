@@ -13,7 +13,7 @@ import os
 import pickle
 import argparse
 
-class StateActionReturnDataset(Dataset):
+class StateActionReturnDataset(torch.utils.data.Dataset):
 
     def __init__(self, data, block_size, actions, done_idxs, rtgs, timesteps):        
         self.block_size = block_size
@@ -111,9 +111,10 @@ parser.add_argument('--num_epochs', type=int, default=50000)
 parser.add_argument('--start_training_state_decoder_after', type=int, default=1000000)
 parser.add_argument('--normalize_latent', type=int, default=0)
 parser.add_argument('--append_goals', type=int, default=0)
+parser.add_argument('--batch_size', type=int, default=10)
 args = parser.parse_args()
 
-batch_size = 128
+batch_size = args.batch_size#128
 
 h_dim = 256
 z_dim = args.z_dim
@@ -136,6 +137,7 @@ beta = args.beta # 1.0 # 0.1, 0.01, 0.001
 conditional_prior = args.conditional_prior # True
 
 env_name = args.env_name
+checkpoint_dir = 'checkpoints/'
 
 if 'atari' not in env_name: 
 	dataset_file = 'data/'+env_name+'.pkl'
@@ -163,8 +165,7 @@ if 'atari' not in env_name:
 else:
 	obss, actions, rewards, done_idxs, timesteps = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories, append_goals=args.append_goals)
 	state_dim = 64
-	a_dim = actions.shape[-1]
-
+	a_dim = 1#max(actions) + 1 #CHANGE THIS WHEN DISCRETE POLICY IS ADDED
 filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)+'_appendgoals_'+str(args.append_goals)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
