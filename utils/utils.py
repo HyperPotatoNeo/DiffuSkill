@@ -143,9 +143,10 @@ def create_dataset(num_buffers=50, num_steps=500000, game='Breakout', data_dir_p
 
 
 def get_dataset(env_name, horizon, stride, test_split=0.2, append_goals=False, get_rewards=False, separate_test_trajectories=False, cum_rewards=True):
-    dataset_file = 'data/'+env_name+'.pkl'
-    with open(dataset_file, "rb") as f:
-        dataset = pickle.load(f)
+    if 'atari' not in env_name:
+        dataset_file = 'data/'+env_name+'.pkl'
+        with open(dataset_file, "rb") as f:
+            dataset = pickle.load(f)
 
     observations = []
     actions = []
