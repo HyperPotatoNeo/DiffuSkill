@@ -13,13 +13,47 @@ import os
 import pickle
 import argparse
 
+class StateActionReturnDataset(Dataset):
+
+    def __init__(self, data, block_size, actions, done_idxs, rtgs, timesteps):        
+        self.block_size = block_size
+        self.vocab_size = max(actions) + 1
+        self.data = data
+        self.actions = actions
+        self.done_idxs = done_idxs
+        self.rtgs = rtgs
+        self.timesteps = timesteps
+    
+    def __len__(self):
+        return len(self.data) - self.block_size
+
+    def __getitem__(self, idx):
+        block_size = self.block_size // 3
+        done_idx = idx + block_size
+        for i in self.done_idxs:
+            if i > idx: # first done_idx greater than idx
+                done_idx = min(int(i), done_idx)
+                break
+        idx = done_idx - block_size
+        states = torch.tensor(np.array(self.data[idx:done_idx]), dtype=torch.float32).reshape(block_size, -1) # (block_size, 4*84*84)
+        states = states / 255.
+        actions = torch.tensor(self.actions[idx:done_idx], dtype=torch.long).unsqueeze(1) # (block_size, 1)
+        rewards = torch.tensor(self.rtgs[idx:done_idx], dtype=torch.float32).unsqueeze(1)
+        timesteps = torch.tensor(self.timesteps[idx:idx+1], dtype=torch.int64).unsqueeze(1)
+
+        return states, actions, rewards, timesteps
+
 def train(model, optimizer, train_state_decoder):
 	losses = []
 	
 	for batch_id, data in enumerate(train_loader):
-		data = data.cuda()
-		states = data[:,:,:model.state_dim]
-		actions = data[:,:,model.state_dim:]
+		if 'atari' not in model.env_name:
+			data = data.cuda()
+			states = data[:,:,:model.state_dim]
+			actions = data[:,:,model.state_dim:]
+		else:
+			states = data[0].cuda()
+			actions = data[1].cuda()
 		if train_state_decoder:
 			loss_tot, s_T_loss, a_loss, kl_loss, diffusion_loss = model.get_losses(states, actions, train_state_decoder)
 		else:
@@ -74,7 +108,7 @@ parser.add_argument('--separate_test_trajectories', type=int, default=0)
 parser.add_argument('--test_split', type=float, default=0.2)
 parser.add_argument('--get_rewards', type=int, default=1)
 parser.add_argument('--num_epochs', type=int, default=50000)
-parser.add_argument('--start_training_state_decoder_after', type=int, default=0)
+parser.add_argument('--start_training_state_decoder_after', type=int, default=1000000)
 parser.add_argument('--normalize_latent', type=int, default=0)
 parser.add_argument('--append_goals', type=int, default=0)
 args = parser.parse_args()
@@ -103,37 +137,40 @@ conditional_prior = args.conditional_prior # True
 
 env_name = args.env_name
 
-dataset_file = 'data/'+env_name+'.pkl'
-with open(dataset_file, "rb") as f:
-	dataset = pickle.load(f)
+if 'atari' not in env_name: 
+	dataset_file = 'data/'+env_name+'.pkl'
+	with open(dataset_file, "rb") as f:
+		dataset = pickle.load(f)
 
-checkpoint_dir = 'checkpoints/'
-states = dataset['observations'] #[:10000]
-#next_states = dataset['next_observations']
-actions = dataset['actions'] #[:10000]
+	checkpoint_dir = 'checkpoints/'
+	states = dataset['observations'] #[:10000]
+	#next_states = dataset['next_observations']
+	actions = dataset['actions'] #[:10000]
 
-N = states.shape[0]
+	N = states.shape[0]
 
-state_dim = states.shape[1] + args.append_goals * 2
-a_dim = actions.shape[1]
+	state_dim = states.shape[1] + args.append_goals * 2
+	a_dim = actions.shape[1]
 
-N_train = int((1-test_split)*N)
-N_test = N - N_train
-
-dataset = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories, append_goals=args.append_goals)
-
-obs_chunks_train = dataset['observations_train']
-action_chunks_train = dataset['actions_train']
-if test_split>0.0:
-	obs_chunks_test = dataset['observations_test']
-	action_chunks_test = dataset['actions_test']
+	N_train = int((1-test_split)*N)
+	N_test = N - N_train
+	dataset = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories, append_goals=args.append_goals)
+	obs_chunks_train = dataset['observations_train']
+	action_chunks_train = dataset['actions_train']
+	if test_split>0.0:
+		obs_chunks_test = dataset['observations_test']
+		action_chunks_test = dataset['actions_test']
+else:
+	obss, actions, rewards, done_idxs, timesteps = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories, append_goals=args.append_goals)
+	state_dim = 64
+	a_dim = actions.shape[-1]
 
 filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)+'_appendgoals_'+str(args.append_goals)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 #experiment.add_tag('noisy2')
 
-model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior, normalize_latent=args.normalize_latent).cuda()
+model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior, normalize_latent=args.normalize_latent, env_name=env_name).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
 if load_from_checkpoint:
@@ -166,20 +203,26 @@ experiment.log_parameters({'lr':lr,
                             'normalize_latent': args.normalize_latent,
                             'append_goals': args.append_goals})
 
-inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
-if test_split>0.0:
-	inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
+if 'atari' not in env_name:
+	inputs_train = torch.cat([obs_chunks_train, action_chunks_train],dim=-1)
+	if test_split>0.0:
+		inputs_test  = torch.cat([obs_chunks_test,  action_chunks_test], dim=-1)
 
-train_loader = DataLoader(
-	inputs_train,
-	batch_size=batch_size,
-	num_workers=0,
-	shuffle=True)
-if test_split>0.0:
-	test_loader = DataLoader(
-		inputs_test,
+	train_loader = DataLoader(
+		inputs_train,
 		batch_size=batch_size,
-		num_workers=0)
+		num_workers=0,
+		shuffle=True)
+	if test_split>0.0:
+		test_loader = DataLoader(
+			inputs_test,
+			batch_size=batch_size,
+			num_workers=0)
+else:
+	inputs_train = StateActionReturnDataset(obss, H*3, actions, done_idxs, rewards, timesteps)
+	train_loader = DataLoader(inputs_train, shuffle=True, pin_memory=True,
+                                batch_size=batch_size,
+                                num_workers=4)
 
 min_test_loss = 10**10
 min_test_s_T_loss = 10**10

@@ -289,7 +289,7 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             max_interval = intervals[max_idx]
             return max_interval.unsqueeze(-1)
         eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
-        return mean + std*eps
+        return mean #+ std*eps
 
 
 class TransformEncoder(nn.Module):
@@ -543,8 +543,46 @@ class GenerativeModel(nn.Module):
         pass
 
 
+class ImageStateEncoder(nn.Module):
+    def __init__(self, horizon, state_dim=64):
+        super(ImageStateEncoder, self).__init__()
+        self.horizon = horizon
+        self.state_dim = state_dim
+        self.conv1 = nn.Conv2d(4, 8, kernel_size=5, stride=1)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=2)
+        self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1)
+        self.conv4 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.gelu = nn.GELU()
+        self.ln1 = nn.LayerNorm(normalized_shape=(8, 80, 80))
+        self.ln2 = nn.LayerNorm(normalized_shape=(16, 19, 19))
+        self.ln3 = nn.LayerNorm(normalized_shape=(32, 7, 7))
+        self.ln4 = nn.LayerNorm(normalized_shape=(64, 3, 3))
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        x = x.reshape(batch_size*self.horizon, 4, 84, 84)
+        x = self.conv1(x)
+        x = self.ln1(x)
+        x = self.gelu(x)
+        x = self.maxpool(x)
+        x = self.conv2(x)
+        x = self.ln2(x)
+        x = self.gelu(x)
+        x = self.maxpool(x)
+        x = self.conv3(x)
+        x = self.ln3(x)
+        x = self.gelu(x)
+        x = self.maxpool(x)
+        x = self.conv4(x)
+        x = self.ln4(x)
+        x = self.maxpool(x)
+        x = x.reshape(batch_size, self.horizon, self.state_dim)
+        return x
+
+
 class SkillModel(nn.Module):
-    def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True,train_diffusion_prior=False,normalize_latent=False):
+    def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True,train_diffusion_prior=False,normalize_latent=False,env_name=''):
         super(SkillModel, self).__init__()
 
         self.state_dim = state_dim # state dimension
@@ -557,6 +595,10 @@ class SkillModel(nn.Module):
         self.diffusion_prior = None
         self.a_dist = a_dist
         self.normalize_latent = normalize_latent
+        self.env_name = env_name
+
+        if 'atari' in env_name:
+            self.image_encoder = ImageStateEncoder(horizon, state_dim=state_dim)
         
         if encoder_type == 'gru':
             self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim,normalize_latent=normalize_latent)
@@ -682,6 +724,9 @@ class SkillModel(nn.Module):
           - D_kl(q(z|s_0,...,s_T,a_0,...,a_T)||P(z_0|s_0))
         Distributions we need:
         '''
+        if 'atari' in self.env_name:
+            states = self.image_encoder(states)
+            
         T = states.shape[1]
         # loss terms corresponding to -logP(s_T|s_0,z) and -logP(a_t|s_t,z)
         s_T = states[:,-1:,:]
