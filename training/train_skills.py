@@ -15,6 +15,8 @@ import argparse
 
 def train(model, optimizer, train_state_decoder):
 	losses = []
+	a_losses = []
+	kl_losses = []
 	
 	for batch_id, data in enumerate(train_loader):
 		if 'atari' not in model.env_name:
@@ -33,8 +35,10 @@ def train(model, optimizer, train_state_decoder):
 		optimizer.step()
 		# log losses
 		losses.append(loss_tot.item())
+		a_losses.append(a_loss.item())
+		kl_losses.append(kl_loss.item())
 		
-	return np.mean(losses)
+	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses)
 
 def test(model, test_state_decoder):
 	losses = []
@@ -199,6 +203,7 @@ min_test_loss = 10**10
 min_test_s_T_loss = 10**10
 min_test_a_loss = 10**10
 for i in range(n_epochs):
+	print(i)
 	if test_split>0.0:
 		test_loss, test_s_T_loss, test_a_loss, test_kl_loss, test_diffusion_loss = test(model, test_state_decoder = i > start_training_state_decoder_after)
 		
@@ -236,13 +241,15 @@ for i in range(n_epochs):
 			torch.save({'model_state_dict': model.state_dict(),
 					'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
 
-	loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
+	loss, train_a_loss, train_kl_loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TRAIN---------")
-	
 	print('Loss: ', loss)
-	print(i)
+	print('train_a_loss: ', train_a_loss)
+	print('train_kl_loss: ', train_kl_loss)
 	experiment.log_metric("Train loss", loss, step=i)
+	experiment.log_metric("test_a_loss", train_a_loss, step=i)
+	experiment.log_metric("test_kl_loss", train_kl_loss, step=i)
 
 	if i % 50 == 0:
 		checkpoint_path = os.path.join(checkpoint_dir,filename+'_'+str(i)+'_'+'.pth')
