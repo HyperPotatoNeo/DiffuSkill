@@ -149,7 +149,7 @@ class LowLevelPolicy(nn.Module):
             self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,21)) #ONLY FOR AUTOREGRESSIVE POLICY DECODER
             self.act = nn.Softmax(dim=2)
         elif a_dist == 'discrete':
-            self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,4))
+            self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
             self.act = nn.Softmax(dim=2)
         else:
             self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
@@ -224,7 +224,10 @@ class AutoregressiveLowLevelPolicy(nn.Module):
     def __init__(self,state_dim,a_dim,z_dim,h_dim,a_dist,fixed_sig=None):
 
         super(AutoregressiveLowLevelPolicy,self).__init__()
-        self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(a_dim)])
+        if a_dist = 'discrete':
+            self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(1)])
+        else:
+            self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(a_dim)])
         self.a_dim = a_dim
         self.a_dist = a_dist
         
@@ -248,15 +251,17 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             state_a = torch.cat([state,actions[:,:,:i]],dim=-1)
             # pass through ith policy component
             a_mean_i,a_sig_i = self.policy_components[i](state_a,z)  # these are batch_size x T x 1
-            if self.a_dist == 'softmax' or self.a_dist == 'discrete':
+            if self.a_dist == 'softmax':# or self.a_dist == 'discrete':
                 a_mean_i = a_mean_i.unsqueeze(dim=2)
             # add to growing list of policy elements
             a_means.append(a_mean_i)
             if not self.a_dist == 'softmax' and not self.a_dist == 'discrete':
                 a_sigs.append(a_sig_i)
-        if self.a_dist == 'softmax' or self.a_dist == 'discrete':
+        if self.a_dist == 'softmax':# or self.a_dist == 'discrete':
             a_means = torch.cat(a_means,dim=2)
             return a_means, None
+        if self.a_dist == 'discrete':
+            return a_mean_i, None
         a_means = torch.cat(a_means,dim=-1)
         a_sigs  = torch.cat(a_sigs, dim=-1)
         return a_means, a_sigs
@@ -297,11 +302,9 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             max_interval = intervals[max_idx]
             return max_interval.unsqueeze(-1)
         elif self.a_dist=='discrete':
-            intervals = torch.linspace(-1, 1, 4).cuda()
-            # max_idx = torch.distributions.categorical.Categorical(mean).sample()
-            max_idx = torch.argmax(mean, dim=2)
-            max_interval = intervals[max_idx]
-            return max_interval.unsqueeze(-1)
+            #max_idx = torch.argmax(mean, dim=2)
+            max_idx = torch.distributions.categorical.Categorical(mean).sample()
+            return max_idx
         eps = torch.normal(torch.zeros(mean.size()).cuda(), torch.ones(mean.size()).cuda())
         return mean #+ std*eps
 
@@ -749,6 +752,8 @@ class SkillModel(nn.Module):
             s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, actions, state_decoder)
             s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
             s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
+        elif 'atari' in self.env_name:
+            a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=self.a_dim), state_decoder)
         else:
             a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, actions, state_decoder)
 

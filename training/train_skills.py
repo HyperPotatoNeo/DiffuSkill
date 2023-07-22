@@ -135,7 +135,7 @@ if 'atari' not in env_name:
 else:
 	obss, actions, rewards, done_idxs, timesteps = get_dataset(env_name, H, stride, test_split, get_rewards=args.get_rewards, separate_test_trajectories=args.separate_test_trajectories, append_goals=args.append_goals)
 	state_dim = 64
-	a_dim = 1#max(actions) + 1 #CHANGE THIS WHEN DISCRETE POLICY IS ADDED
+	a_dim = max(actions) + 1 #CHANGE THIS WHEN DISCRETE POLICY IS ADDED
 filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)+'_appendgoals_'+str(args.append_goals)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
