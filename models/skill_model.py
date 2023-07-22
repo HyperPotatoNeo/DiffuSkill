@@ -224,11 +224,11 @@ class AutoregressiveLowLevelPolicy(nn.Module):
     def __init__(self,state_dim,a_dim,z_dim,h_dim,a_dist,fixed_sig=None):
 
         super(AutoregressiveLowLevelPolicy,self).__init__()
-        if a_dist = 'discrete':
-            self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(1)])
+        if a_dist == 'discrete':
+            self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,a_dim,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(1)])
         else:
             self.policy_components = nn.ModuleList([LowLevelPolicy(state_dim+i,1,z_dim,h_dim,a_dist=a_dist,fixed_sig=fixed_sig) for i in range(a_dim)])
-        self.a_dim = a_dim
+        self.a_dim = a_dim if not a_dist == 'discrete' else 1
         self.a_dist = a_dist
         
     def forward(self,state,actions,z):
@@ -783,7 +783,7 @@ class SkillModel(nn.Module):
                 z_prior_sigs = torch.ones_like(z_post_sigs)
                 z_prior_dist = Normal.Normal(z_prior_means, z_prior_sigs)
 
-        a_loss   = -torch.mean(torch.sum(a_dist.log_prob(actions), dim=-1))
+        a_loss   = -torch.mean(torch.sum(a_dist.log_prob(torch.squeeze(actions,dim=2)), dim=-1))
         if not self.normalize_latent:
             kl_loss = torch.mean(torch.sum(KL.kl_divergence(z_post_dist, z_prior_dist), dim=-1))/T 
         else:
