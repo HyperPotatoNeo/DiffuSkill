@@ -148,6 +148,9 @@ class LowLevelPolicy(nn.Module):
         if a_dist=='softmax':
             self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,21)) #ONLY FOR AUTOREGRESSIVE POLICY DECODER
             self.act = nn.Softmax(dim=2)
+        elif a_dist == 'discrete':
+            self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,4))
+            self.act = nn.Softmax(dim=2)
         else:
             self.mean_layer = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
             self.sig_layer  = nn.Sequential(nn.Linear(h_dim,h_dim),nn.ReLU(),nn.Linear(h_dim,a_dim))
@@ -173,7 +176,7 @@ class LowLevelPolicy(nn.Module):
         feats = self.layers(state_z)
         # get mean and stand dev of action distribution
         a_mean = self.mean_layer(feats)
-        if self.a_dist=='softmax':
+        if self.a_dist=='softmax' or self.a_dist == 'discrete':
             a_mean = self.act(a_mean)
             return a_mean, None
         a_sig  = nn.Softplus()(self.sig_layer(feats))
@@ -200,6 +203,11 @@ class LowLevelPolicy(nn.Module):
     def reparameterize(self, mean, std):
         if self.a_dist=='softmax':
             intervals = torch.linspace(-1, 1, 21).cuda()
+            max_idx = torch.argmax(mean, dim=2).unsqueeze(2)
+            max_interval = intervals[max_idx]
+            return max_interval
+        elif self.a_dist == 'discrete':
+            intervals = torch.linspace(-1, 1, 4).cuda()
             max_idx = torch.argmax(mean, dim=2).unsqueeze(2)
             max_interval = intervals[max_idx]
             return max_interval
@@ -240,13 +248,13 @@ class AutoregressiveLowLevelPolicy(nn.Module):
             state_a = torch.cat([state,actions[:,:,:i]],dim=-1)
             # pass through ith policy component
             a_mean_i,a_sig_i = self.policy_components[i](state_a,z)  # these are batch_size x T x 1
-            if self.a_dist == 'softmax':
+            if self.a_dist == 'softmax' or self.a_dist == 'discrete':
                 a_mean_i = a_mean_i.unsqueeze(dim=2)
             # add to growing list of policy elements
             a_means.append(a_mean_i)
-            if not self.a_dist == 'softmax':
+            if not self.a_dist == 'softmax' and not self.a_dist == 'discrete':
                 a_sigs.append(a_sig_i)
-        if self.a_dist == 'softmax':
+        if self.a_dist == 'softmax' or self.a_dist == 'discrete':
             a_means = torch.cat(a_means,dim=2)
             return a_means, None
         a_means = torch.cat(a_means,dim=-1)
@@ -284,6 +292,12 @@ class AutoregressiveLowLevelPolicy(nn.Module):
     def reparameterize(self, mean, std):
         if self.a_dist=='softmax':
             intervals = torch.linspace(-1, 1, 21).cuda()
+            # max_idx = torch.distributions.categorical.Categorical(mean).sample()
+            max_idx = torch.argmax(mean, dim=2)
+            max_interval = intervals[max_idx]
+            return max_interval.unsqueeze(-1)
+        elif self.a_dist=='discrete':
+            intervals = torch.linspace(-1, 1, 4).cuda()
             # max_idx = torch.distributions.categorical.Categorical(mean).sample()
             max_idx = torch.argmax(mean, dim=2)
             max_interval = intervals[max_idx]
@@ -748,6 +762,10 @@ class SkillModel(nn.Module):
             a_dist = torch.distributions.categorical.Categorical(a_means)
             actions_round = torch.round(actions*10)/10
             actions = ((actions_round+1)*10).long() #Get class indices
+        elif self.decoder.ll_policy.a_dist == 'discrete':
+            a_dist = torch.distributions.categorical.Categorical(a_means)
+        else:
+            raise NotImplementedError
 
         z_post_dist = Normal.Normal(z_post_means, z_post_sigs)
 

@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from models.skill_model import SkillModel
-from utils.utils import get_dataset
+from utils.utils import get_dataset, StateActionReturnDataset
 
 def collect_data(args):
     if 'antmaze' in args.env:
@@ -19,6 +19,9 @@ def collect_data(args):
     elif 'maze' in args.env:
         state_dim = 4 + args.append_goals * 2
         a_dim = 2
+    elif 'Breakout' in args.env:
+        state_dim = 64
+        a_dim = 1
     else:
         raise NotImplementedError
 
@@ -39,37 +42,53 @@ def collect_data(args):
                              policy_decoder_type=args.policy_decoder_type,
                              per_element_sigma=args.per_element_sigma,
                              conditional_prior=args.conditional_prior,
+                             env_name=args.env
                              ).to(args.device)
     skill_model.load_state_dict(checkpoint['model_state_dict'])
     skill_model.eval()
 
-    dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals)
+    if 'atari' in args.env:
+        obss, actions, rewards, done_idxs, timesteps = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals)
 
-    obs_chunks_train = dataset['observations_train']
-    action_chunks_train = dataset['actions_train']
+        inputs_train = StateActionReturnDataset(obss, args.horizon * 3, actions, done_idxs, rewards, timesteps)
+        train_loader = DataLoader(inputs_train,
+                                    batch_size=args.batch_size,
+                                    num_workers=0)
+    else:
+        dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals)
 
-    inputs_train = torch.cat([obs_chunks_train, action_chunks_train], dim=-1)
+        obs_chunks_train = dataset['observations_train']
+        action_chunks_train = dataset['actions_train']
 
-    train_loader = DataLoader(
-        inputs_train,
-        batch_size=args.batch_size,
-        num_workers=0)
+        inputs_train = torch.cat([obs_chunks_train, action_chunks_train], dim=-1)
 
-    states_gt = np.zeros((inputs_train.shape[0], state_dim))
-    latent_gt = np.zeros((inputs_train.shape[0], args.z_dim))
+        train_loader = DataLoader(
+            inputs_train,
+            batch_size=args.batch_size,
+            num_workers=0)
+
+    states_gt = np.zeros((len(inputs_train), state_dim))
+    latent_gt = np.zeros((len(inputs_train), args.z_dim))
     if args.save_z_dist:
-        latent_std_gt = np.zeros((inputs_train.shape[0], args.z_dim))
-    sT_gt = np.zeros((inputs_train.shape[0], state_dim))
+        latent_std_gt = np.zeros((len(inputs_train), args.z_dim))
+    sT_gt = np.zeros((len(inputs_train), state_dim))
 
     for batch_id, data in enumerate(train_loader):
-        data = data.to(args.device)
-        states = data[:, :, :skill_model.state_dim]
-        actions = data[:, :, skill_model.state_dim:]
+        if 'atari' not in args.env:
+            data = data.to(args.device)
+            states = data[:, :, :skill_model.state_dim]
+            actions = data[:, :, skill_model.state_dim:]
+        else:
+            states = data[0].to(args.device)
+            actions = data[1].to(args.device)
+            with torch.no_grad():
+                states = skill_model.image_encoder(states)
 
         start_idx = batch_id * args.batch_size
         end_idx = start_idx + args.batch_size
-        states_gt[start_idx : end_idx] = data[:, 0, :skill_model.state_dim].cpu().numpy()
-        sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
+        states_gt[start_idx : end_idx] = states[:, 0].cpu().numpy()
+        sT_gt[start_idx: end_idx] = states[:, -1].cpu().numpy()
+
         output, output_std = skill_model.encoder(states, actions)
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
         if args.save_z_dist:
