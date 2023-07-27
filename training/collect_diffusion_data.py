@@ -21,7 +21,7 @@ def collect_data(args):
         a_dim = 2
     elif 'Breakout' in args.env:
         state_dim = 64
-        a_dim = 1
+        a_dim = 4
     else:
         raise NotImplementedError
 
