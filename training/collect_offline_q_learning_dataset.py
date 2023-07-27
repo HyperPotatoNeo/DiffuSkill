@@ -13,7 +13,7 @@ from models.diffusion_models import (
     Model_Cond_Diffusion,
 )
 from models.skill_model import SkillModel
-from utils.utils import get_dataset, StateActionReturnDataset
+from utils.utils import get_dataset, StateActionReturnTerminalsDataset
 
 def collect_data(args):
     if 'antmaze' in args.env:
@@ -72,7 +72,7 @@ def collect_data(args):
     if 'atari' in args.env:
         obss, actions, rewards, done_idxs, timesteps = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals)
 
-        inputs_train = StateActionReturnDataset(obss, args.horizon * 3, actions, done_idxs, rewards, timesteps)
+        inputs_train = StateActionReturnTerminalsDataset(obss, args.horizon * 3, actions, done_idxs, rewards, timesteps)
         train_loader = DataLoader(inputs_train,
                                     batch_size=args.batch_size,
                                     num_workers=0)
