@@ -21,7 +21,7 @@ def collect_data(args):
         a_dim = 2
     elif 'Breakout' in args.env:
         state_dim = 64
-        a_dim = 1
+        a_dim = 4
     else:
         raise NotImplementedError
 
@@ -89,7 +89,10 @@ def collect_data(args):
         states_gt[start_idx : end_idx] = states[:, 0].cpu().numpy()
         sT_gt[start_idx: end_idx] = states[:, -1].cpu().numpy()
 
-        output, output_std = skill_model.encoder(states, actions)
+        if 'atari' in args.env:
+            output, output_std = skill_model.encoder(states, torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=a_dim))
+        else:
+            output, output_std = skill_model.encoder(states, actions)
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
         if args.save_z_dist:
             latent_std_gt[start_idx : end_idx] = output_std.detach().cpu().numpy().squeeze(1)

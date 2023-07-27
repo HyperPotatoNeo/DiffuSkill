@@ -13,15 +13,23 @@ from models.diffusion_models import (
     Model_Cond_Diffusion,
 )
 from models.skill_model import SkillModel
-from utils.utils import get_dataset
+from utils.utils import get_dataset, StateActionReturnDataset
 
 def collect_data(args):
-    dataset_file = 'data/'+args.env+'.pkl'
-    with open(dataset_file, "rb") as f:
-        dataset = pickle.load(f)
-
-    state_dim = dataset['observations'].shape[1]
-    a_dim = dataset['actions'].shape[1]
+    if 'antmaze' in args.env:
+        state_dim = 29 + args.append_goals * 2
+        a_dim = 8
+    elif 'kitchen' in args.env:
+        state_dim = 60
+        a_dim = 9
+    elif 'maze' in args.env:
+        state_dim = 4 + args.append_goals * 2
+        a_dim = 2
+    elif 'Breakout' in args.env:
+        state_dim = 64
+        a_dim = 4
+    else:
+        raise NotImplementedError
 
     skill_model_path = os.path.join(args.checkpoint_dir, args.skill_model_filename)
 
@@ -40,6 +48,7 @@ def collect_data(args):
                              policy_decoder_type=args.policy_decoder_type,
                              per_element_sigma=args.per_element_sigma,
                              conditional_prior=args.conditional_prior,
+                             env_name=args.env
                              ).to(args.device)
     skill_model.load_state_dict(checkpoint['model_state_dict'])
     skill_model.eval()
@@ -59,54 +68,72 @@ def collect_data(args):
         )
         diffusion_model.eval()
 
-    dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals, get_rewards=True, cum_rewards=args.cum_rewards)
 
-    obs_chunks_train = dataset['observations_train']
-    action_chunks_train = dataset['actions_train']
-    rewards_chunks_train = dataset['rewards_train']
-    if not 'maze' in args.env and not 'kitchen' in args.env:
-        terminals_chunks_train = dataset['terminals_train']
-        inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train, terminals_chunks_train], dim=-1)
+    if 'atari' in args.env:
+        obss, actions, rewards, done_idxs, timesteps = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals)
+
+        inputs_train = StateActionReturnDataset(obss, args.horizon * 3, actions, done_idxs, rewards, timesteps)
+        train_loader = DataLoader(inputs_train,
+                                    batch_size=args.batch_size,
+                                    num_workers=0)
     else:
-        inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train], dim=-1)
+        dataset = get_dataset(args.env, args.horizon, args.stride, 0.0, args.append_goals, get_rewards=True, cum_rewards=args.cum_rewards)
 
-    train_loader = DataLoader(
-        inputs_train,
-        batch_size=args.batch_size,
-        num_workers=0)
+        obs_chunks_train = dataset['observations_train']
+        action_chunks_train = dataset['actions_train']
+        rewards_chunks_train = dataset['rewards_train']
 
-    states_gt = np.zeros((inputs_train.shape[0], state_dim+2*args.append_goals))
-    latent_gt = np.zeros((inputs_train.shape[0], args.z_dim))
+        if not 'maze' in args.env and not 'kitchen' in args.env:
+            terminals_chunks_train = dataset['terminals_train']
+            inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train, terminals_chunks_train], dim=-1)
+        else:
+            inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train], dim=-1)
+
+        train_loader = DataLoader(
+            inputs_train,
+            batch_size=args.batch_size,
+            num_workers=0)
+
+    states_gt = np.zeros((len(inputs_train), state_dim+2*args.append_goals))
+    latent_gt = np.zeros((len(inputs_train), args.z_dim))
     if args.save_z_dist:
-        latent_std_gt = np.zeros((inputs_train.shape[0], args.z_dim))
-    sT_gt = np.zeros((inputs_train.shape[0], state_dim))
-    rewards_gt = np.zeros((inputs_train.shape[0], 1))
+        latent_std_gt = np.zeros((len(inputs_train), args.z_dim))
+    sT_gt = np.zeros((len(inputs_train), state_dim))
+    rewards_gt = np.zeros((len(inputs_train), 1))
 
     if args.do_diffusion:
-        diffusion_latents_gt = np.zeros((inputs_train.shape[0], args.num_diffusion_samples, args.z_dim))
+        diffusion_latents_gt = np.zeros((len(inputs_train), args.num_diffusion_samples, args.z_dim))
     else:
-        prior_latents_gt = np.zeros((inputs_train.shape[0], args.num_prior_samples, args.z_dim))
+        prior_latents_gt = np.zeros((len(inputs_train), args.num_prior_samples, args.z_dim))
 
-    if not 'maze' in args.env and not 'kitchen' in args.env:
-        terminals_gt = np.zeros((inputs_train.shape[0], 1))
+    if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
+        terminals_gt = np.zeros((len(inputs_train), 1))
     gamma_array = np.power(args.gamma, np.arange(args.horizon))
 
     for batch_id, data in enumerate(tqdm(train_loader)):
-        data = data.to(args.device)
-        states = data[:, :, :skill_model.state_dim]
-        actions = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim]
-        if not 'maze' in args.env and not 'kitchen' in args.env:
-            rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:skill_model.state_dim+2*args.append_goals+a_dim+1]
-            terminals = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim+1:]
+        if 'atari' not in args.env:
+            data = data.to(args.device)
+            states = data[:, :, :skill_model.state_dim]
+            actions = data[:, :, skill_model.state_dim+2*args.append_goals:skill_model.state_dim+2*args.append_goals+a_dim]
+            if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
+                rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:skill_model.state_dim+2*args.append_goals+a_dim+1]
+                terminals = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim+1:]
+            else:
+                rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:]
+
         else:
-            rewards = data[:, :, skill_model.state_dim+2*args.append_goals+a_dim:]
+            states = data[0].to(args.device)
+            actions = data[1].to(args.device)
+            rewards = data[2].to(args.device)
+            with torch.no_grad():
+                states = skill_model.image_encoder(states)
 
         start_idx = batch_id * args.batch_size
         end_idx = start_idx + args.batch_size
-        states_gt[start_idx : end_idx] = data[:, 0, :skill_model.state_dim+2*args.append_goals].cpu().numpy()
-        sT_gt[start_idx: end_idx] = states[:, -1, :skill_model.state_dim].cpu().numpy()
+        states_gt[start_idx : end_idx] = states[:, 0].cpu().numpy()
+        sT_gt[start_idx: end_idx] = states[:, -1].cpu().numpy()
         rewards_gt[start_idx: end_idx, 0] = np.sum(rewards.cpu().numpy()[:,:,0]*gamma_array, axis=1)
-        if not 'maze' in args.env and not 'kitchen' in args.env:
+        if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
             terminals_gt[start_idx: end_idx] = np.sum(terminals.cpu().numpy(), axis=1)
 
         if not args.do_diffusion:
@@ -115,29 +142,35 @@ def collect_data(args):
                 prior_latent_mean = prior_latent_mean.repeat_interleave(args.num_prior_samples, 0)
                 prior_latent_std = prior_latent_std.repeat_interleave(args.num_prior_samples, 0)
 
-                prior_latents_gt[start_idx : end_idx] = torch.stack(torch.distributions.normal.Normal(prior_latent_mean, prior_latent_std).sample().chunk(data.shape[0])).cpu().numpy()
+                prior_latents_gt[start_idx : end_idx] = torch.stack(torch.distributions.normal.Normal(prior_latent_mean, prior_latent_std).sample().chunk(states.shape[0])).cpu().numpy()
         else:
             diffusion_state = states[:, -1, :skill_model.state_dim].repeat_interleave(args.num_diffusion_samples, 0)
             with torch.no_grad():
-                diffusion_latents_gt[start_idx : end_idx] = torch.stack(diffusion_model.sample_extra(diffusion_state, predict_noise=args.predict_noise, extra_steps=args.extra_steps).chunk(data.shape[0])).cpu().numpy()
+                diffusion_latents_gt[start_idx : end_idx] = torch.stack(diffusion_model.sample_extra(diffusion_state, predict_noise=args.predict_noise, extra_steps=args.extra_steps).chunk(states.shape[0])).cpu().numpy()
 
-        output, output_std = skill_model.encoder(states, actions)
+        if 'atari' in args.env:
+            output, output_std = skill_model.encoder(states, torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=a_dim))
+        else:
+            output, output_std = skill_model.encoder(states, actions)
+
         latent_gt[start_idx : end_idx] = output.detach().cpu().numpy().squeeze(1)
         if args.save_z_dist:
             latent_std_gt[start_idx : end_idx] = output_std.detach().cpu().numpy().squeeze(1)
 
-    np.save('data/' + args.skill_model_filename[:-4] + '_states.npy', states_gt)
-    np.save('data/' + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
-    np.save('data/' + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
-    np.save('data/' + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
+    DATA_DIR = '/zfsauton2/home/siddartv/data/'
+
+    np.save(DATA_DIR + args.skill_model_filename[:-4] + '_states.npy', states_gt)
+    np.save(DATA_DIR + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)
+    np.save(DATA_DIR + args.skill_model_filename[:-4] + '_sT.npy', sT_gt)
+    np.save(DATA_DIR + args.skill_model_filename[:-4] + '_rewards.npy', rewards_gt)
     if args.do_diffusion:
-        np.save('data/' + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
+        np.save(DATA_DIR + args.skill_model_filename[:-4] + '_sample_latents.npy', diffusion_latents_gt)
     else:
-        np.save('data/' + args.skill_model_filename[:-4] + '_prior_latents.npy', prior_latents_gt)
+        np.save(DATA_DIR + args.skill_model_filename[:-4] + '_prior_latents.npy', prior_latents_gt)
     if args.save_z_dist:
-        np.save('data/' + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
-    if not 'maze' in args.env and not 'kitchen' in args.env:
-        np.save('data/' + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
+        np.save(DATA_DIR + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
+    if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
+        np.save(DATA_DIR + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
 
 
 if __name__ == '__main__':
