@@ -106,7 +106,7 @@ def collect_data(args):
     else:
         prior_latents_gt = np.zeros((len(inputs_train), args.num_prior_samples, args.z_dim))
 
-    if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
+    if not 'maze' in args.env and not 'kitchen' in args.env:# and not 'atari' in args.env:
         terminals_gt = np.zeros((len(inputs_train), 1))
     gamma_array = np.power(args.gamma, np.arange(args.horizon))
 
@@ -125,6 +125,7 @@ def collect_data(args):
             states = data[0].to(args.device)
             actions = data[1].to(args.device)
             rewards = data[2].to(args.device)
+            terminals = data[4].to(args.device)
             with torch.no_grad():
                 states = skill_model.image_encoder(states)
 
@@ -135,6 +136,8 @@ def collect_data(args):
         rewards_gt[start_idx: end_idx, 0] = np.sum(rewards.cpu().numpy()[:,:,0]*gamma_array, axis=1)
         if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
             terminals_gt[start_idx: end_idx] = np.sum(terminals.cpu().numpy(), axis=1)
+        elif 'atari' in args.env:
+            terminals_gt[start_idx: end_idx] = terminals.cpu().numpy()
 
         if not args.do_diffusion:
             with torch.no_grad():
@@ -169,7 +172,7 @@ def collect_data(args):
         np.save(DATA_DIR + args.skill_model_filename[:-4] + '_prior_latents.npy', prior_latents_gt)
     if args.save_z_dist:
         np.save(DATA_DIR + args.skill_model_filename[:-4] + '_latents_std.npy', latent_std_gt)
-    if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
+    if not 'maze' in args.env and not 'kitchen' in args.env:# and not 'atari' in args.env:
         np.save(DATA_DIR + args.skill_model_filename[:-4] + '_terminals.npy', terminals_gt)
 
 
