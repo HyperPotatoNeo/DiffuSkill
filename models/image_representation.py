@@ -128,6 +128,7 @@ class InverseDynamics(nn.Module):
 
 class ImageRepresentation(nn.Module):
     def __init__(state_dim=64, a_dim=2, horizon=10, noise_std=0.05):
+        super(ImageRepresentation, self).__init__()
         self.state_dim = state_dim
         self.a_dim = a_dim
         self.horizon = horizon
