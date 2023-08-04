@@ -20,7 +20,7 @@ def train(model, optimizer):
     s_losses = []
     
     for batch_id, data in enumerate(train_loader):
-        states = data[0].cuda()
+        states = torch.reshape(data[0].cuda(),(-1,H,4,84,84))
         actions = data[1].cuda()
         loss_tot, a_loss, s_loss = model.get_losses(states, actions)
         model.zero_grad()
@@ -54,7 +54,7 @@ a_dim = max(actions) + 1
 filename = 'image_encoder_'+env_name+'_H_'+str(H)
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
 
-model = ImageRepresentation(state_dim, a_dim, H)
+model = ImageRepresentation(state_dim, a_dim, H).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
 experiment.log_parameters({'lr':lr,
