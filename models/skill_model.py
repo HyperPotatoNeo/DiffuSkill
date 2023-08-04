@@ -9,7 +9,7 @@ import torch.distributions.normal as Normal
 import torch.distributions.categorical as Categorical
 import torch.distributions.mixture_same_family as MixtureSameFamily
 import torch.distributions.kl as KL
-from utils.utils import reparameterize
+# from utils.utils import reparameterize
 from models.diffusion_models import (
     Model_mlp,
     Model_cnn_mlp,
@@ -576,9 +576,10 @@ class ImageStateEncoder(nn.Module):
         self.ln3 = nn.LayerNorm(normalized_shape=(32, 7, 7))
         self.ln4 = nn.LayerNorm(normalized_shape=(64, 3, 3))
 
-    def forward(self, x):
-        batch_size = x.shape[0]
-        x = x.reshape(batch_size*self.horizon, 4, 84, 84)
+    def forward(self, x, horizon=None):
+        if horizon is None:
+            horizon = self.horizon
+        x = x.reshape(-1, 4, 84, 84)
         x = self.conv1(x)
         x = self.ln1(x)
         x = self.gelu(x)
@@ -594,7 +595,7 @@ class ImageStateEncoder(nn.Module):
         x = self.conv4(x)
         x = self.ln4(x)
         x = self.maxpool(x)
-        x = x.reshape(batch_size, self.horizon, self.state_dim)
+        x = x.reshape(-1, horizon, self.state_dim)
         return x
 
 
