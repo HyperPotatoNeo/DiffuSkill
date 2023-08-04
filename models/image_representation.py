@@ -108,7 +108,8 @@ class ImageStateDecoder(nn.Module):
 
 
 class InverseDynamics(nn.Module):
-    def __init__(state_dim=64, a_dim=2):
+    def __init__(self, state_dim=64, a_dim=2):
+        super(InverseDynamics, self).__init__()
         self.state_dim = 64
         self.a_dim = a_dim
         self.inv_dynamics_net = nn.Sequential(nn.Linear(2*state_dim,512),nn.ReLU(),nn.Linear(512,512),nn.ReLU(),nn.Linear(512,128),nn.ReLU(),nn.Linear(128,a_dim),nn.Softmax(dim=a_dim))
@@ -127,7 +128,7 @@ class InverseDynamics(nn.Module):
 
 
 class ImageRepresentation(nn.Module):
-    def __init__(state_dim=64, a_dim=2, horizon=10, noise_std=0.05):
+    def __init__(self, state_dim=64, a_dim=2, horizon=10, noise_std=0.05):
         super(ImageRepresentation, self).__init__()
         self.state_dim = state_dim
         self.a_dim = a_dim
