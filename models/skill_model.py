@@ -52,7 +52,7 @@ class AbstractDynamics(nn.Module):
         # pass s0_z through layers
         feats = self.layers(s0_z)
         # get mean and stand dev of action distribution
-        sT_mean = self.mean_layer(feats)
+        sT_mean = self.mean_layer(feats)+s0
         sT_sig  = self.sig_layer(feats)
 
         if not self.per_element_sigma:
@@ -485,7 +485,7 @@ class Decoder(nn.Module):
             if self.state_decoder_type == 'autoregressive':
                 sT_mean, sT_sig = self.abstract_dynamics(s_0, s_T, z.detach())
             elif self.state_decoder_type == 'mlp':
-                sT_mean, sT_sig = self.abstract_dynamics(s_0, z.detach())
+                sT_mean, sT_sig = self.abstract_dynamics(s_0, z)#.detach())
             return sT_mean, sT_sig, a_mean, a_sig
 
         else:
@@ -599,6 +599,64 @@ class ImageStateEncoder(nn.Module):
         return x
 
 
+class ImageStateDecoder(nn.Module):
+    def __init__(self, state_dim=64, horizon=10):
+        super(ImageStateDecoder, self).__init__()
+        self.horizon = horizon
+        self.state_dim = state_dim
+        self.conv1 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.upsample1 = nn.Upsample(size=(4,4))
+        self.conv2 = nn.Conv2d(64, 32, kernel_size=3, stride=1)
+        self.upsample2 = nn.Upsample(size=(8,8))
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
+        self.upsample3 = nn.Upsample(size=(16,16))
+        self.conv4 = nn.Conv2d(32, 16, kernel_size=3, stride=1)
+        self.upsample4 = nn.Upsample(size=(32,32))
+        self.conv5 = nn.Conv2d(16, 8, kernel_size=3, stride=1)
+        self.upsample5 = nn.Upsample(size=(64,64))
+        self.conv6 = nn.Conv2d(8, 8, kernel_size=3, stride=1)
+        self.upsample6 = nn.Upsample(size=(88,88))
+        self.conv7 = nn.Conv2d(8, 4, kernel_size=3, stride=1)
+        self.gelu = nn.GELU()
+        self.ln1 = nn.LayerNorm(normalized_shape=(64, 2, 2))
+        self.ln2 = nn.LayerNorm(normalized_shape=(32, 6, 6))
+        self.ln3 = nn.LayerNorm(normalized_shape=(32, 14, 14))
+        self.ln4 = nn.LayerNorm(normalized_shape=(16, 30, 30))
+        self.ln5 = nn.LayerNorm(normalized_shape=(8, 62, 62))
+        self.ln6 = nn.LayerNorm(normalized_shape=(8, 86, 86))
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        x = x.reshape(batch_size*self.horizon, self.state_dim, 1, 1)
+        x = self.upsample1(x)
+        x = self.conv1(x)
+        x = self.ln1(x)
+        x = self.gelu(x)
+        x = self.upsample2(x)
+        x = self.conv2(x)
+        x = self.ln2(x)
+        x = self.gelu(x)
+        x = self.upsample3(x)
+        x = self.conv3(x)
+        x = self.ln3(x)
+        x = self.gelu(x)
+        x = self.upsample4(x)
+        x = self.conv4(x)
+        x = self.ln4(x)
+        x = self.gelu(x)
+        x = self.upsample5(x)
+        x = self.conv5(x)
+        x = self.ln5(x)
+        x = self.gelu(x)
+        x = self.upsample6(x)
+        x = self.conv6(x)
+        x = self.ln6(x)
+        x = self.gelu(x)
+        x = self.conv7(x)
+        x = x.reshape(batch_size, self.horizon, 4*84*84)
+        return x
+
+
 class SkillModel(nn.Module):
     def __init__(self,state_dim,a_dim,z_dim,h_dim,horizon,a_dist='normal',beta=1.0,fixed_sig=None,encoder_type='gru',state_decoder_type='mlp',policy_decoder_type='mlp',per_element_sigma=True,conditional_prior=True,train_diffusion_prior=False,normalize_latent=False,env_name=''):
         super(SkillModel, self).__init__()
@@ -617,6 +675,7 @@ class SkillModel(nn.Module):
 
         if 'atari' in env_name:
             self.image_encoder = ImageStateEncoder(horizon, state_dim=state_dim).cuda()
+            self.image_decoder = ImageStateDecoder(state_dim = state_dim, horizon=horizon).cuda()
         
         if encoder_type == 'gru':
             self.encoder = GRUEncoder(state_dim,a_dim,z_dim,h_dim,normalize_latent=normalize_latent).cuda()
@@ -742,15 +801,24 @@ class SkillModel(nn.Module):
           - D_kl(q(z|s_0,...,s_T,a_0,...,a_T)||P(z_0|s_0))
         Distributions we need:
         '''
+        reconstruction_loss = 0.0
         if 'atari' in self.env_name:
+            image_copy = torch.clone(states).detach()
             states = self.image_encoder(states)
+            image_reconstruct = self.image_decoder(states)
+            mse_loss = nn.MSELoss()
+            reconstruction_loss = mse_loss(image_reconstruct, image_copy)
             
         T = states.shape[1]
         # loss terms corresponding to -logP(s_T|s_0,z) and -logP(a_t|s_t,z)
         s_T = states[:,-1:,:]
 
-        if state_decoder:
+        if state_decoder and not 'atari' in self.env_name:
             s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, actions, state_decoder)
+            s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
+            s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
+        elif state_decoder and 'atari' in self.env_name:
+            s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=self.a_dim), state_decoder)
             s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
             s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
         elif 'atari' in self.env_name:
@@ -795,13 +863,13 @@ class SkillModel(nn.Module):
         else:
             diffusion_loss = 0.0
 
-        loss_tot = a_loss + self.beta * kl_loss + diffusion_loss
+        loss_tot = a_loss + self.beta * kl_loss + reconstruction_loss
 
         if state_decoder:
             loss_tot += s_T_loss
-            return  loss_tot, s_T_loss, a_loss, kl_loss, diffusion_loss
+            return  loss_tot, s_T_loss, a_loss, kl_loss, reconstruction_loss
         else:
-            return  loss_tot, a_loss, kl_loss, diffusion_loss
+            return  loss_tot, a_loss, kl_loss, reconstruction_loss
 
 
     def get_expected_cost(self, s0, skill_seq, goal_states):

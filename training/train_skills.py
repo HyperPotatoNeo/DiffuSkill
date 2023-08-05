@@ -17,6 +17,7 @@ def train(model, optimizer, train_state_decoder):
 	losses = []
 	a_losses = []
 	kl_losses = []
+	reconstruction_losses = []
 	
 	for batch_id, data in enumerate(train_loader):
 		if 'atari' not in model.env_name:
@@ -27,9 +28,9 @@ def train(model, optimizer, train_state_decoder):
 			states = data[0].cuda()
 			actions = data[1].cuda()
 		if train_state_decoder:
-			loss_tot, s_T_loss, a_loss, kl_loss, diffusion_loss = model.get_losses(states, actions, train_state_decoder)
+			loss_tot, s_T_loss, a_loss, kl_loss, reconstruction_loss = model.get_losses(states, actions, train_state_decoder)
 		else:
-			loss_tot, a_loss, kl_loss, diffusion_loss = model.get_losses(states, actions, train_state_decoder)
+			loss_tot, a_loss, kl_loss, reconstruction_loss = model.get_losses(states, actions, train_state_decoder)
 		model.zero_grad()
 		loss_tot.backward()
 		optimizer.step()
@@ -37,8 +38,9 @@ def train(model, optimizer, train_state_decoder):
 		losses.append(loss_tot.item())
 		a_losses.append(a_loss.item())
 		kl_losses.append(kl_loss.item())
+		reconstruction_losses.append(reconstruction_loss.item())
 		
-	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses)
+	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses), np.mean(reconstruction_losses)
 
 def test(model, test_state_decoder):
 	losses = []
@@ -241,15 +243,18 @@ for i in range(n_epochs):
 			torch.save({'model_state_dict': model.state_dict(),
 					'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
 
-	loss, train_a_loss, train_kl_loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
+	loss, train_a_loss, train_kl_loss, train_reconstruction_loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TRAIN---------")
 	print('Loss: ', loss)
 	print('train_a_loss: ', train_a_loss)
 	print('train_kl_loss: ', train_kl_loss)
+	if 'atari' in env_name:
+		print('train_reconstruction_loss: ', train_reconstruction_loss)
+		experiment.log_metric("Train_reconstruction_loss", train_reconstruction_loss, step=i)
 	experiment.log_metric("Train loss", loss, step=i)
-	experiment.log_metric("test_a_loss", train_a_loss, step=i)
-	experiment.log_metric("test_kl_loss", train_kl_loss, step=i)
+	experiment.log_metric("Train_a_loss", train_a_loss, step=i)
+	experiment.log_metric("Train_kl_loss", train_kl_loss, step=i)
 
 	if i % 50 == 0:
 		checkpoint_path = os.path.join(checkpoint_dir,filename+'_'+str(i)+'_'+'.pth')
