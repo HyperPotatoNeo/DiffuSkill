@@ -18,6 +18,7 @@ def train(model, optimizer, train_state_decoder):
 	a_losses = []
 	kl_losses = []
 	reconstruction_losses = []
+	sT_losses = []
 	
 	for batch_id, data in enumerate(train_loader):
 		if 'atari' not in model.env_name:
@@ -39,8 +40,10 @@ def train(model, optimizer, train_state_decoder):
 		a_losses.append(a_loss.item())
 		kl_losses.append(kl_loss.item())
 		reconstruction_losses.append(reconstruction_loss.item())
+		if train_state_decoder:
+			sT_losses.append(s_T_loss)
 		
-	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses), np.mean(reconstruction_losses)
+	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses), np.mean(reconstruction_losses), np,mean(sT_losses)
 
 def test(model, test_state_decoder):
 	losses = []
@@ -243,7 +246,7 @@ for i in range(n_epochs):
 			torch.save({'model_state_dict': model.state_dict(),
 					'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
 
-	loss, train_a_loss, train_kl_loss, train_reconstruction_loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
+	loss, train_a_loss, train_kl_loss, train_reconstruction_loss, train_sT_loss = train(model, optimizer, train_state_decoder = i > start_training_state_decoder_after)
 	
 	print("--------TRAIN---------")
 	print('Loss: ', loss)
@@ -252,6 +255,9 @@ for i in range(n_epochs):
 	if 'atari' in env_name:
 		print('train_reconstruction_loss: ', train_reconstruction_loss)
 		experiment.log_metric("Train_reconstruction_loss", train_reconstruction_loss, step=i)
+	if i > start_training_state_decoder_after:
+		print('train_sT_loss: ', train_sT_loss)
+		experiment.log_metric("Train_sT_loss", train_sT_loss, step=i)
 	experiment.log_metric("Train loss", loss, step=i)
 	experiment.log_metric("Train_a_loss", train_a_loss, step=i)
 	experiment.log_metric("Train_kl_loss", train_kl_loss, step=i)
