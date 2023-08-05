@@ -802,11 +802,11 @@ class SkillModel(nn.Module):
         Distributions we need:
         '''
         reconstruction_loss = 0.0
+        mse_loss = nn.MSELoss()
         if 'atari' in self.env_name:
             image_copy = torch.clone(states).detach()
             states = self.image_encoder(states)
             image_reconstruct = self.image_decoder(states)
-            mse_loss = nn.MSELoss()
             reconstruction_loss = mse_loss(image_reconstruct, image_copy)
             
         T = states.shape[1]
@@ -819,8 +819,9 @@ class SkillModel(nn.Module):
             s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
         elif state_decoder and 'atari' in self.env_name:
             s_T_mean, s_T_sig, a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=self.a_dim), state_decoder)
-            s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
-            s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
+            #s_T_dist = Normal.Normal(s_T_mean, s_T_sig )
+            #s_T_loss = -torch.mean(torch.sum(s_T_dist.log_prob(s_T), dim=-1)) / T
+            s_T_loss = mse_loss(s_T_mean, s_T)
         elif 'atari' in self.env_name:
             a_means, a_sigs, z_post_means, z_post_sigs, z_sampled = self.forward(states, torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=self.a_dim), state_decoder)
         else:
