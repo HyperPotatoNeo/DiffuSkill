@@ -112,7 +112,7 @@ class InverseDynamics(nn.Module):
         super(InverseDynamics, self).__init__()
         self.state_dim = 64
         self.a_dim = a_dim
-        self.inv_dynamics_net = nn.Sequential(nn.Linear(2*state_dim,512),nn.ReLU(),nn.Linear(512,512),nn.ReLU(),nn.Linear(512,128),nn.ReLU(),nn.Linear(128,a_dim),nn.Softmax(dim=a_dim))
+        self.inv_dynamics_net = nn.Sequential(nn.Linear(2*state_dim,512),nn.ReLU(),nn.Linear(512,512),nn.ReLU(),nn.Linear(512,128),nn.ReLU(),nn.Linear(128,a_dim),nn.Softmax(dim=2))
         self.CELoss = nn.CrossEntropyLoss()
 
     def forward(self, x):
@@ -146,9 +146,9 @@ class ImageRepresentation(nn.Module):
         return z, a_pred, states_pred
 
     def get_losses(self, states, actions):
-        actions = torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=self.a_dim)[:,:-1,:]
-        noised_states = states + self.noise_std*torch.randn(size=states.shape)
-        z, a_pred, states_pred = self.forward(states)
+        actions = torch.nn.functional.one_hot(torch.squeeze(actions,dim=2), num_classes=self.a_dim)[:,:-1,:].float()
+        noised_states = states + self.noise_std*torch.randn(size=states.shape).cuda()
+        z, a_pred, states_pred = self.forward(noised_states)
         ce_loss = nn.CrossEntropyLoss()
         mse_loss = nn.MSELoss()
         a_loss = ce_loss(a_pred, actions)/(actions.shape[0]*actions.shape[1])
