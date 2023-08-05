@@ -41,9 +41,9 @@ def train(model, optimizer, train_state_decoder):
 		kl_losses.append(kl_loss.item())
 		reconstruction_losses.append(reconstruction_loss.item())
 		if train_state_decoder:
-			sT_losses.append(s_T_loss)
+			sT_losses.append(s_T_loss.item())
 		
-	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses), np.mean(reconstruction_losses), np,mean(sT_losses)
+	return np.mean(losses), np.mean(a_losses), np.mean(kl_losses), np.mean(reconstruction_losses), np.mean(sT_losses)
 
 def test(model, test_state_decoder):
 	losses = []
