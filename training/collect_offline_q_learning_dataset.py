@@ -28,6 +28,18 @@ def collect_data(args):
     elif 'Breakout' in args.env:
         state_dim = 64
         a_dim = 4
+    elif 'pen' in args.env:
+        state_dim = 45
+        a_dim = 24
+    elif 'door' in args.env:
+        state_dim = 39
+        a_dim = 28
+    elif 'hammer' in args.env:
+        state_dim = 46
+        a_dim = 26
+    elif 'relocate' in args.env:
+        state_dim = 39
+        a_dim = 30
     else:
         raise NotImplementedError
 
@@ -83,7 +95,7 @@ def collect_data(args):
         action_chunks_train = dataset['actions_train']
         rewards_chunks_train = dataset['rewards_train']
 
-        if not 'maze' in args.env and not 'kitchen' in args.env:
+        if not 'maze' in args.env and not 'kitchen' in args.env and not 'pen' in args.env and not 'hammer' in args.env and not 'relocate' in args.env and not 'door' in args.env:
             terminals_chunks_train = dataset['terminals_train']
             inputs_train = torch.cat([obs_chunks_train, action_chunks_train, rewards_chunks_train, terminals_chunks_train], dim=-1)
         else:
@@ -134,7 +146,7 @@ def collect_data(args):
         states_gt[start_idx : end_idx] = states[:, 0].cpu().numpy()
         sT_gt[start_idx: end_idx] = states[:, -1].cpu().numpy()
         rewards_gt[start_idx: end_idx, 0] = np.sum(rewards.cpu().numpy()[:,:,0]*gamma_array, axis=1)
-        if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env:
+        if not 'maze' in args.env and not 'kitchen' in args.env and not 'atari' in args.env and not 'pen' in args.env and not 'relocate' in args.env and not 'door' in args.env and not 'hammer' in args.env:
             terminals_gt[start_idx: end_idx] = np.sum(terminals.cpu().numpy(), axis=1)
         elif 'atari' in args.env:
             terminals_gt[start_idx: end_idx] = terminals.cpu().numpy()
@@ -160,7 +172,7 @@ def collect_data(args):
         if args.save_z_dist:
             latent_std_gt[start_idx : end_idx] = output_std.detach().cpu().numpy().squeeze(1)
 
-    DATA_DIR = '/zfsauton2/home/siddartv/data/'
+    DATA_DIR = 'data/'
 
     np.save(DATA_DIR + args.skill_model_filename[:-4] + '_states.npy', states_gt)
     np.save(DATA_DIR + args.skill_model_filename[:-4] + '_latents.npy', latent_gt)

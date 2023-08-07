@@ -39,7 +39,8 @@ def train(model, optimizer, train_state_decoder):
 		losses.append(loss_tot.item())
 		a_losses.append(a_loss.item())
 		kl_losses.append(kl_loss.item())
-		reconstruction_losses.append(reconstruction_loss.item())
+		if 'atari' in model.env_name:
+			reconstruction_losses.append(reconstruction_loss.item())
 		if train_state_decoder:
 			sT_losses.append(s_T_loss.item())
 		
@@ -148,7 +149,7 @@ else:
 filename = 'skill_model_'+env_name+'_encoderType('+encoder_type+')_state_dec_'+str(state_decoder_type)+'_policy_dec_'+str(policy_decoder_type)+'_H_'+str(H)+'_b_'+str(beta)+'_conditionalp_'+str(conditional_prior)+'_zdim_'+str(z_dim)+'_adist_'+a_dist+'_testSplit_'+str(test_split)+'_separatetest_'+str(args.separate_test_trajectories)+'_getrewards_'+str(args.get_rewards)+'_appendgoals_'+str(args.append_goals)
 
 experiment = Experiment(api_key = 'LVi0h2WLrDaeIC6ZVITGAvzyl', project_name = 'DiffuSkill')
-#experiment.add_tag('noisy2')
+#experiment.add_tag('0*state')
 
 model = SkillModel(state_dim,a_dim,z_dim,h_dim,horizon=H,a_dist=a_dist,beta=beta,fixed_sig=None,encoder_type=encoder_type,state_decoder_type=state_decoder_type,policy_decoder_type=policy_decoder_type,per_element_sigma=per_element_sigma, conditional_prior=conditional_prior, train_diffusion_prior=train_diffusion_prior, normalize_latent=args.normalize_latent, env_name=env_name).cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
